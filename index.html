@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="교대근무">
+<meta name="theme-color" content="#121A45">
+<title>교대근무 달력</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 레이아웃: 휴대폰 한 화면에 머리(조 선택) + 오늘 카드 + 한 달 달력이 다 보이게. 고른 날 4개 조는 그 아래,
+   근무 변경·캘린더 내보내기·설정은 아래에서 올라오는 시트. 넓은 화면은 2열(왼쪽 오늘·고른 날, 오른쪽 달력) */
+:root {
+  --bg: #eef1f5; --surface: #ffffff; --ink: #0f172a; --sub: #5b6474; --hair: #e1e5ec;
+  --day: #eba12a; --day-ink: #3d2800; --day-tint: #fff3dc;
+  --night: #3446a8; --night-ink: #ffffff; --night-tint: #e7eafb;
+  --off: #8f99a9; --off-tint: #f2f4f7;
+  --today: #e5484d; --ok: #1f8a5b; --warn: #c2410c;
+  --hero-day-a: #ffe2a8; --hero-day-b: #ffc864; --hero-night-a: #26357f; --hero-night-b: #121a45;
+  --hero-day-ink: #3d2800; --hero-off-a: #ffffff; --hero-off-b: #e6eaf0;
+  --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 6px 20px rgba(15, 23, 42, .06);
+  --font: "IBM Plex Sans KR", "Pretendard", system-ui, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0b0e14; --surface: #151a25; --ink: #e9edf5; --sub: #8d97a8; --hair: #252c3a;
+  --day: #f2b23e; --day-ink: #2a1c00; --day-tint: #2b2313;
+  --night: #8191f2; --night-ink: #0c1130; --night-tint: #1c2246;
+  --off: #6b7587; --off-tint: #1a1f2b;
+  --today: #ff6b6f; --ok: #4cc38a; --warn: #fb923c;
+  --hero-day-a: #4a3713; --hero-day-b: #2b210d; --hero-night-a: #2a3790; --hero-night-b: #121845;
+  --hero-day-ink: #ffe3a6; --hero-off-a: #1b2130; --hero-off-b: #141925;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0b0e14; --surface: #151a25; --ink: #e9edf5; --sub: #8d97a8; --hair: #252c3a;
+  --day: #f2b23e; --day-ink: #2a1c00; --day-tint: #2b2313;
+  --night: #8191f2; --night-ink: #0c1130; --night-tint: #1c2246;
+  --off: #6b7587; --off-tint: #1a1f2b;
+  --today: #ff6b6f; --ok: #4cc38a; --warn: #fb923c;
+  --hero-day-a: #4a3713; --hero-day-b: #2b210d; --hero-night-a: #2a3790; --hero-night-b: #121845;
+  --hero-day-ink: #ffe3a6; --hero-off-a: #1b2130; --hero-off-b: #141925;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: max(10px, env(safe-area-inset-top, 0px)); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  -webkit-tap-highlight-color: transparent; font-variant-numeric: tabular-nums;
+}
+.wrap { max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+@media (min-width: 880px) {
+  body { padding-top: 24px; }
+  .wrap { max-width: 1000px; display: grid; grid-template-columns: 370px 1fr; gap: 16px;
+    grid-template-areas: "top top" "hero cal" "detail cal"; align-items: start; grid-template-rows: auto auto 1fr; }
+  .top { grid-area: top; } .hero { grid-area: hero; } .cal { grid-area: cal; } .detail { grid-area: detail; }
+  .cal { padding: 18px 16px 14px; }
+  .cell { aspect-ratio: 1 / .9; }
+  .cell .d { font-size: 15px; }
+  .cell .s { font-size: 12px; }
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--night); outline-offset: 2px; }
+
+/* 머리 */
+.top { display: flex; align-items: center; gap: 10px; }
+.seg { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); background: var(--surface); border: 1px solid var(--hair);
+  border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; height: 36px; border-radius: 9px; font-weight: 600; color: var(--sub); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.iconbtn { width: 44px; height: 44px; flex: none; border-radius: 12px; border: 1px solid var(--hair); background: var(--surface);
+  display: grid; place-items: center; color: var(--ink); }
+.iconbtn svg { width: 20px; height: 20px; }
+
+/* 오늘 카드 */
+.hero { border-radius: 18px; padding: 12px 14px 11px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+  background: linear-gradient(150deg, var(--hero-off-a), var(--hero-off-b)); border: 1px solid var(--hair); }
+.hero.day { background: linear-gradient(150deg, var(--hero-day-a), var(--hero-day-b)); border-color: transparent; color: var(--hero-day-ink); }
+.hero.night { background: linear-gradient(150deg, var(--hero-night-a), var(--hero-night-b)); border-color: transparent; color: #f3f5ff; }
+.hero .k { font-size: 12.5px; font-weight: 500; opacity: .75; letter-spacing: .02em; }
+.hero .big { font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; margin-top: 1px; }
+.hero .big small { font-size: 14px; font-weight: 500; opacity: .75; margin-left: 8px; letter-spacing: 0; }
+.hero .glyph { position: absolute; right: 12px; top: 10px; width: 44px; height: 44px; opacity: .9; }
+.cycle { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 9px; }
+.cycle span { height: 20px; border-radius: 5px; display: grid; place-items: center; font-size: 10.5px; font-weight: 600; }
+.cycle .day { background: var(--day); color: var(--day-ink); }
+.cycle .night { background: var(--night); color: var(--night-ink); }
+.cycle .off { background: rgba(127, 137, 153, .22); color: inherit; }
+.cycle .cur { outline: 2px solid currentColor; outline-offset: 1px; }
+.hero.night .cycle .night { background: #8191f2; color: #0c1130; }
+.cycle-cap { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; margin-top: 6px; }
+.cycle-cap span:first-child { font-weight: 600; opacity: .9; }
+.cycle-cap span:last-child { opacity: .65; white-space: nowrap; }
+
+/* 달력 */
+.card { background: var(--surface); border: 1px solid var(--hair); border-radius: 18px; box-shadow: var(--shadow); }
+.cal { padding: 10px 8px 8px; touch-action: pan-y; }
+.mhead { display: flex; align-items: center; gap: 5px; padding: 0 2px 8px 6px; }
+.mhead h1 { flex: 1; margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; min-width: 0; }
+.mhead h1 small { display: block; font-size: 11px; font-weight: 500; color: var(--sub); letter-spacing: .02em; line-height: 1.2; }
+.mhead .todayBtn[hidden] { display: none; }
+.mhead .nav { width: 34px; height: 34px; border-radius: 10px; border: 0; background: var(--off-tint); display: grid; place-items: center; }
+.mhead .nav svg { width: 18px; height: 18px; }
+.mhead .todayBtn { height: 34px; padding: 0 10px; border-radius: 10px; border: 0; background: var(--off-tint); font-weight: 600; font-size: 13px; }
+.vt { display: grid; grid-template-columns: 1fr 1fr; background: var(--off-tint); border-radius: 10px; padding: 2px; gap: 2px; }
+.vt button { border: 0; background: transparent; height: 30px; padding: 0 7px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--sub); white-space: nowrap; }
+.vt button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+.dow, .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.dow div { text-align: center; font-size: 12px; color: var(--sub); padding-bottom: 4px; font-weight: 500; }
+.dow .sun, .cell.sun .d { color: var(--today); }
+.dow .sat, .cell.sat .d { color: var(--night); }
+.cell { aspect-ratio: 1 / 1.02; min-width: 0; min-height: 46px; border: 0; border-radius: 10px; padding: 4px 0 5px; background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between; position: relative; }
+@media (max-width: 359px) { .cell { aspect-ratio: auto; height: 48px; } .vt button { padding: 0 5px; } }
+/* 4개 조 보기: 그날 주간 조 / 야간 조 글자 */
+.cell .s2 { display: flex; gap: 2px; }
+.cell .s2 b { min-width: 17px; height: 17px; border-radius: 5px; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; padding: 0 2px; }
+.cell .s2 .dd { background: var(--day); color: var(--day-ink); }
+.cell .s2 .nn { background: var(--night); color: var(--night-ink); }
+.cell .s2 b.me { box-shadow: 0 0 0 1.5px var(--ink); }
+.cell.blank { visibility: hidden; }
+.cell .d { font-weight: 600; font-size: 14px; }
+.cell .s { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; }
+.cell.day { background: var(--day-tint); }
+.cell.day .s { background: var(--day); color: var(--day-ink); }
+.cell.night { background: var(--night-tint); }
+.cell.night .s { background: var(--night); color: var(--night-ink); }
+.cell.off .s { color: var(--off); font-weight: 500; }
+.cell.today .d { background: var(--today); color: #fff; border-radius: 999px; min-width: 24px; height: 24px; display: grid; place-items: center; margin-top: -2px; }
+.cell.sel { box-shadow: inset 0 0 0 2px var(--ink); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--sub); padding: 10px 6px 2px; border-top: 1px solid var(--hair); margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legend b { color: var(--ink); font-weight: 600; }
+
+/* 고른 날 */
+.detail { padding: 12px 14px 14px; }
+.dhead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.detail h2 { flex: 1; margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.detail h2 span { color: var(--sub); font-weight: 500; font-size: 13px; }
+.teams4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tm { border-radius: 12px; padding: 8px 4px; text-align: center; background: var(--off-tint); }
+.tm .t { font-size: 12px; color: var(--sub); font-weight: 500; }
+.tm .v { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.tm.day { background: var(--day); color: var(--day-ink); }
+.tm.night { background: var(--night); color: var(--night-ink); }
+.tm.day .t, .tm.night .t { color: inherit; opacity: .75; }
+.tm.off .v { color: var(--sub); }
+.tm.mine { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
+.detail p { margin: 10px 0 0; font-size: 13px; color: var(--sub); }
+.detail p b { color: var(--today); font-weight: 600; }
+.tm .chg { display: block; font-size: 10.5px; font-weight: 600; opacity: .8; margin-top: 1px; }
+.btn.edit { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.btn.edit svg { width: 15px; height: 15px; }
+
+/* 내 근무 변경 (시트 안) */
+.ovr { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.ovr-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 700; }
+.ovr-h span { font-size: 12px; font-weight: 600; color: var(--today); }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--night); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; font-size: inherit; }
+
+/* 캘린더 내보내기 */
+.ex { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ex dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13.5px; }
+.ex dt { color: var(--sub); }
+.ex dd { margin: 0; font-weight: 600; }
+.ex .btn.primary { height: 46px; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.ex .btn.primary svg { width: 18px; height: 18px; }
+a.btn { text-decoration: none; color: var(--ink); }
+a.btn.primary { color: var(--surface); }
+.ex .msg { font-size: 13px; }
+.ex .msg.ok { color: var(--ok); }
+.ex .msg.bad { color: var(--warn); }
+.steps { margin: 0; padding: 0 4px 0 22px; font-size: 13px; color: var(--sub); line-height: 1.65; }
+.steps b { color: var(--ink); font-weight: 600; }
+.pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.pick button { height: 40px; border-radius: 10px; border: 1px solid var(--hair); background: var(--surface); font-weight: 600; color: var(--sub); }
+.pick button[aria-pressed="true"][data-ov="day"] { background: var(--day); border-color: var(--day); color: var(--day-ink); }
+.pick button[aria-pressed="true"][data-ov="night"] { background: var(--night); border-color: var(--night); color: var(--night-ink); }
+.pick button[aria-pressed="true"][data-ov="off"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.memo-row { display: flex; gap: 6px; }
+.memo-row input { flex: 1; min-width: 0; height: 40px; border-radius: 10px; border: 1px solid var(--hair); background: var(--off-tint); padding: 0 12px; font-size: 14px; }
+.memo-row input:disabled { opacity: .5; }
+.memo-row button { height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--hair); background: var(--surface); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.memo-row button:disabled { opacity: .4; cursor: default; }
+.ovr .hint { font-size: 12px; color: var(--sub); }
+.cell.chg::before { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--today); }
+.legend .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--today); }
+
+/* 설정 시트 */
+.scrim { position: fixed; inset: 0; background: rgba(8, 12, 20, .45); z-index: 20; }
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 88vh; overflow-y: auto;
+  background: var(--bg); border-radius: 22px 22px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, .2);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-top: 8px; padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+.sheet .in { max-width: 460px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+.grab { width: 40px; height: 4px; border-radius: 4px; background: var(--hair); margin: 4px auto 6px; }
+.sheet h3 { margin: 0; font-size: 18px; display: flex; align-items: center; justify-content: space-between; }
+.sheet h4 { margin: 0 0 6px 4px; font-size: 12.5px; color: var(--sub); font-weight: 600; letter-spacing: .04em; }
+.group { background: var(--surface); border: 1px solid var(--hair); border-radius: 16px; overflow: hidden; }
+.item { padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+.item + .item { border-top: 1px solid var(--hair); }
+.item .txt { flex: 1; min-width: 0; }
+.item .nm { font-weight: 600; }
+.item .ds { font-size: 12.5px; color: var(--sub); margin-top: 2px; }
+.times { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 16px 14px; margin-top: -4px; }
+.times label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sub); background: var(--off-tint);
+  border-radius: 10px; padding: 4px 4px 4px 12px; }
+.times input { border: 0; background: var(--surface); border-radius: 8px; padding: 6px 8px; font-weight: 600; font-size: 15px; }
+.sw { position: relative; width: 50px; height: 30px; flex: none; }
+.sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.sw i { position: absolute; inset: 0; border-radius: 999px; background: var(--hair); transition: background .15s; }
+.sw i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .15s; }
+.sw input:checked + i { background: var(--ok); }
+.sw input:checked + i::after { transform: translateX(20px); }
+.sw input:focus-visible + i { outline: 2px solid var(--night); outline-offset: 2px; }
+.sw input:disabled + i { opacity: .45; }
+.status { padding: 12px 16px; font-size: 13px; color: var(--sub); border-top: 1px solid var(--hair); display: flex; flex-direction: column; gap: 8px; }
+.status .nextA { color: var(--ink); font-weight: 600; }
+.status .warn { color: var(--warn); }
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--hair); background: var(--surface); border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 600; }
+.btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.sheet select { width: 100%; border: 0; background: transparent; padding: 0; font-weight: 600; font-size: 15px; }
+.note { font-size: 12.5px; color: var(--sub); padding: 0 4px; line-height: 1.6; }
+.webonly { color: var(--warn); }
+@media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="seg" role="group" aria-label="내 조">
+      <button type="button" id="team-A" data-team="A">A조</button>
+      <button type="button" id="team-B" data-team="B">B조</button>
+      <button type="button" id="team-C" data-team="C">C조</button>
+      <button type="button" id="team-D" data-team="D">D조</button>
+    </div>
+    <button type="button" class="iconbtn" id="openEx" aria-label="캘린더로 내보내기">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5 12 18l2.5-2.5"/></svg>
+    </button>
+    <button type="button" class="iconbtn" id="openSet" aria-label="알람과 설정">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M5 4 2 7M19 4l3 3"/></svg>
+    </button>
+  </header>
+
+  <section class="hero" id="hero" aria-live="polite">
+    <div class="k" id="hK">오늘</div>
+    <div class="big" id="hBig">-</div>
+    <div class="cycle" id="hCycle"></div>
+    <div class="cycle-cap"><span id="hNext"></span><span id="hPos"></span></div>
+  </section>
+
+  <section class="card cal" id="cal">
+    <div class="mhead">
+      <h1 id="title">-</h1>
+      <div class="vt" role="group" aria-label="달력 보기">
+        <button type="button" id="vMine" data-view="mine">내 조</button>
+        <button type="button" id="vAll" data-view="all">4개 조</button>
+      </div>
+      <button type="button" class="todayBtn" id="today">오늘</button>
+      <button type="button" class="nav" id="prev" aria-label="이전 달"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m15 6-6 6 6 6"/></svg></button>
+      <button type="button" class="nav" id="next" aria-label="다음 달"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>
+    <div class="dow"><div class="sun">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div class="sat">토</div></div>
+    <div class="grid" id="grid"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="card detail">
+    <div class="dhead">
+      <h2 id="dTitle">-</h2>
+      <button type="button" class="btn edit" id="openOv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>근무 변경</button>
+    </div>
+    <div class="teams4" id="dRows"></div>
+    <p id="dNext"></p>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<section class="sheet" id="ovSheet" hidden role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+  <div class="in">
+    <div class="grab"></div>
+    <h3 id="ovTitle"><span id="ovDate">근무 변경</span> <button type="button" class="btn" data-close>닫기</button></h3>
+    <div class="ovr">
+      <div class="ovr-h">이날 내 근무 <span id="ovrState"></span></div>
+      <div class="pick" role="group" aria-label="이날 내 근무">
+        <button type="button" id="ov-day" data-ov="day">주간</button>
+        <button type="button" id="ov-night" data-ov="night">야간</button>
+        <button type="button" id="ov-off" data-ov="off">휴무</button>
+      </div>
+      <div class="memo-row">
+        <input type="text" id="ovrMemo" maxlength="40" placeholder="메모 (예: 홍길동 대신 대근)" aria-label="변경 메모">
+        <button type="button" id="ovrReset">원래대로</button>
+      </div>
+      <div class="hint" id="ovrHint"></div>
+    </div>
+    <p class="note">아이폰 캘린더에도 반영하려면 바꾼 뒤 <button type="button" class="linkbtn" id="ovToEx">캘린더로 내보내기</button>를 다시 하세요.</p>
+  </div>
+</section>
+
+<section class="sheet" id="exSheet" hidden role="dialog" aria-modal="true" aria-labelledby="exTitle">
+  <div class="in">
+    <div class="grab"></div>
+    <h3 id="exTitle">캘린더로 내보내기 <button type="button" class="btn" data-close>닫기</button></h3>
+    <div class="group ex">
+      <dl>
+        <dt>조</dt><dd id="exTeam">-</dd>
+        <dt>기간</dt><dd id="exRange">-</dd>
+        <dt>근무 변경</dt><dd id="exOv">-</dd>
+        <dt>알림</dt><dd id="exAlarm">-</dd>
+      </dl>
+      <button type="button" class="btn primary" id="exGo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg><span id="exGoTxt">캘린더 파일 받기</span></button>
+      <div class="msg" id="exMsg" hidden></div>
+      <div class="note" style="padding:0">알림 시각은 <button type="button" class="linkbtn" id="exToSet">알람과 설정</button>에서 바꿉니다.</div>
+    </div>
+    <div id="hostBox" hidden>
+      <h4>자동 업데이트 구독 (대근 없이 기본 근무표만)</h4>
+      <div class="group ex">
+        <a class="btn primary" id="subLink" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/></svg><span id="subTxt">구독하기</span></a>
+        <div class="note" style="padding:0">한 번 누르면 아이폰 캘린더가 알아서 새 근무표를 받아 옵니다. 구독 화면에서 <b>알림 제거</b>를 꺼야 알림이 울립니다.
+          <b>위 파일 받기와 둘 중 하나만</b> 쓰세요(같이 쓰면 일정이 두 번 보임). 대근이 잦으면 파일 받기가 낫습니다.</div>
+        <button type="button" class="btn" id="subCopy">구독 주소 복사 (구글 캘린더 등)</button>
+      </div>
+      <h4 style="margin-top:14px">안드로이드 · 갤럭시 워치</h4>
+      <div class="group ex">
+        <a class="btn" href="ShiftCalendar.apk" download style="text-align:center">알람 앱 받기 (ShiftCalendar.apk)</a>
+        <div class="note" style="padding:0">받은 파일을 눌러 설치 → "출처를 알 수 없는 앱" 허용. 앱에서는 끌 때까지 울리는 출근 알람을 쓸 수 있습니다.</div>
+      </div>
+    </div>
+    <div>
+      <h4>아이폰 · 애플워치</h4>
+      <ol class="steps">
+        <li>받은 <b>교대근무_X조.ics</b> 파일을 누르기 (사파리 다운로드 목록 또는 파일 앱)</li>
+        <li><b>모두 추가</b> → 넣을 캘린더 고르기. 근무만 따로 넣으려면 먼저 캘린더 앱에서 <b>교대근무</b> 캘린더를 만들어 두세요</li>
+        <li>대근을 바꿔 다시 내보낼 때는 그 <b>교대근무</b> 캘린더를 지우고(캘린더 → 정보 ⓘ → 캘린더 삭제) 새로 넣으면 겹치지 않습니다</li>
+        <li>애플워치는 아이폰 캘린더 알림이 그대로 뜹니다. 끝까지 울리는 알람은 아니니 기상용은 시계 앱 알람도 같이 쓰세요</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<section class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="in">
+    <div class="grab"></div>
+    <h3 id="setTitle">알람과 설정 <button type="button" class="btn" data-close>닫기</button></h3>
+
+    <div>
+      <h4>알람</h4>
+      <div class="group">
+        <div class="item">
+          <div class="txt"><div class="nm">출근 기상 알람</div><div class="ds">근무일마다 끌 때까지 울림. 휴무일은 안 울림</div></div>
+          <label class="sw"><input type="checkbox" id="aWake" aria-label="출근 기상 알람"><i></i></label>
+        </div>
+        <div class="times">
+          <label for="aWakeDay">주간</label><input type="time" id="aWakeDay">
+          <label for="aWakeNight">야간</label><input type="time" id="aWakeNight">
+        </div>
+        <div class="item">
+          <div class="txt"><div class="nm">전날 미리 알림</div><div class="ds">근무가 바뀌기 전날 "내일부터 야간 2일"</div></div>
+          <label class="sw"><input type="checkbox" id="aEve" aria-label="전날 미리 알림"><i></i></label>
+        </div>
+        <div class="times"><label for="aEveTime">알림 시각</label><input type="time" id="aEveTime"></div>
+        <div class="item">
+          <div class="txt"><div class="nm">휴무 시작 알림</div><div class="ds">휴무 첫날 "오늘부터 휴무 2일"</div></div>
+          <label class="sw"><input type="checkbox" id="aOff" aria-label="휴무 시작 알림"><i></i></label>
+        </div>
+        <div class="times"><label for="aOffTime">알림 시각</label><input type="time" id="aOffTime"></div>
+        <div class="status" id="aStatus"></div>
+      </div>
+    </div>
+
+    <div>
+      <h4>조 순서</h4>
+      <div class="group">
+        <div class="item">
+          <div class="txt"><div class="ds">주간에 들어오는 순서 (2일 간격)</div>
+            <select id="order" aria-label="주간에 들어오는 조 순서"></select></div>
+        </div>
+      </div>
+      <p class="note">근무 패턴: 주 주 휴 휴 야 야 휴 휴 (8일 반복)<br>기준: 2026-10-31(토) = D조 주간 첫날
+        <span class="webonly" id="orderWarn" hidden><br>기본 순서(D → A → B → C)와 다르게 설정되어 있습니다.</span></p>
+    </div>
+  </div>
+</section>
+
+<script>
+// 4조 2교대 근무 계산 (8일 주기: 주 주 휴 휴 야 야 휴 휴)
+// 브라우저에서는 window.Shift, Node 에서는 module.exports 로 쓴다.
+(function (root) {
+  'use strict';
+
+  var PATTERN = ['day', 'day', 'off', 'off', 'night', 'night', 'off', 'off'];
+  var LABEL = { day: '주간', night: '야간', off: '휴무' };
+  var TEAMS = ['A', 'B', 'C', 'D'];
+
+  // 기준: 2026-10-31(토) = 기준 조의 주간 첫날 (주기 위치 0)
+  var BASE_UTC = Date.UTC(2026, 9, 31);
+  var BASE_TEAM = 'D';
+  var DAY_MS = 86400000;
+
+  // 주간에 들어오는 순서 (기준 조부터, 2일씩). 2026-10-31 사용자 확인: D -> A -> B -> C -> D ...
+  var DEFAULT_ORDER = ['D', 'A', 'B', 'C'];
+
+  function mod(n, m) { return ((n % m) + m) % m; }
+
+  // 날짜(연,월0~11,일)의 기준일부터 일수. 시간대/서머타임 영향 없게 UTC 자정으로 계산
+  function dayIndex(y, m, d) {
+    return Math.round((Date.UTC(y, m, d) - BASE_UTC) / DAY_MS);
+  }
+
+  // order[k] 조는 기준일보다 2k 일 늦게 주간을 시작한다 → 위치 = (일수 - 2k) mod 8
+  function position(team, y, m, d, order) {
+    order = order || DEFAULT_ORDER;
+    var k = order.indexOf(team);
+    if (k < 0) throw new Error('알 수 없는 조: ' + team);
+    return mod(dayIndex(y, m, d) - 2 * k, 8);
+  }
+
+  function shiftOf(team, y, m, d, order) {
+    return PATTERN[position(team, y, m, d, order)];
+  }
+
+  // 그날 4개 조 근무 { A: 'off', B: 'night', ... }
+  function allTeams(y, m, d, order) {
+    var r = {};
+    for (var i = 0; i < TEAMS.length; i++) r[TEAMS[i]] = shiftOf(TEAMS[i], y, m, d, order);
+    return r;
+  }
+
+  // 기준 조 D 를 맨 앞에 둔 가능한 순서 6가지
+  function allOrders() {
+    var rest = TEAMS.filter(function (t) { return t !== BASE_TEAM; });
+    var out = [];
+    (function perm(prefix, left) {
+      if (!left.length) { out.push([BASE_TEAM].concat(prefix)); return; }
+      for (var i = 0; i < left.length; i++) {
+        perm(prefix.concat(left[i]), left.slice(0, i).concat(left.slice(i + 1)));
+      }
+    })([], rest);
+    return out;
+  }
+
+  // ---- 알람 ----
+  // 설정 기본값. 시각은 'HH:MM'
+  var DEFAULT_ALARMS = {
+    wake: { on: false, day: '05:30', night: '17:30' }, // 근무일 기상 알람 (소리 계속)
+    eve: { on: false, time: '21:00' },                 // 근무가 바뀌기 전날 미리 알림
+    off: { on: false, time: '09:00' }                  // 휴무가 시작되는 날 알림
+  };
+
+  function parseTime(s) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(s || ''));
+    if (!m || +m[1] > 23 || +m[2] > 59) return null;
+    return { h: +m[1], mi: +m[2] };
+  }
+
+  // ---- 내 근무 변경 (대근, 연차 등) ----
+  // overrides = { 'YYYY-MM-DD': { shift: 'day'|'night'|'off', memo: '...' } }
+  function dateKey(y, m, d) {
+    var t = new Date(Date.UTC(y, m, d));
+    return t.getUTCFullYear() + '-' + ('0' + (t.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + t.getUTCDate()).slice(-2);
+  }
+
+  function overrideOf(overrides, y, m, d) {
+    var o = overrides && overrides[dateKey(y, m, d)];
+    return o && LABEL[o.shift] ? o : null;
+  }
+
+  // 변경을 반영한 내 근무
+  function myShift(team, y, m, d, order, overrides) {
+    var o = overrideOf(overrides, y, m, d);
+    return o ? o.shift : shiftOf(team, y, m, d, order);
+  }
+
+  // 같은 근무가 연속되는 일수 (그날 포함, 그날부터 앞으로). 변경 반영
+  function runLength(team, y, m, d, order, overrides) {
+    var k = myShift(team, y, m, d, order, overrides), n = 1;
+    while (n < 31 && myShift(team, y, m, d + n, order, overrides) === k) n++;
+    return n;
+  }
+
+  // from(Date, 기기 현지 시각) 이후 days 일 동안 울릴 알람 목록. at = epoch ms (현지 시각 기준)
+  // opt = { team, order, alarms, overrides }
+  function alarmEvents(opt, from, days) {
+    var team = opt.team, order = opt.order, a = opt.alarms || DEFAULT_ALARMS, ov = opt.overrides;
+    var out = [], y0 = from.getFullYear(), m0 = from.getMonth(), d0 = from.getDate();
+    function push(kind, y, m, d, t, title, body) {
+      var tm = parseTime(t);
+      if (!tm) return;
+      var at = new Date(y, m, d, tm.h, tm.mi, 0, 0);
+      if (at.getTime() <= from.getTime()) return;
+      var id = kind + '-' + at.getFullYear() + ('0' + (at.getMonth() + 1)).slice(-2) + ('0' + at.getDate()).slice(-2);
+      out.push({ id: id, kind: kind, at: at.getTime(), title: title, body: body });
+    }
+    for (var i = 0; i <= days; i++) {
+      var y = y0, m = m0, d = d0 + i;
+      var cur = myShift(team, y, m, d, order, ov);
+      var prev = myShift(team, y, m, d - 1, order, ov);
+      var next = myShift(team, y, m, d + 1, order, ov);
+      if (a.wake && a.wake.on && cur !== 'off') {
+        var t = cur === 'day' ? a.wake.day : a.wake.night;
+        push('wake', y, m, d, t, team + '조 ' + LABEL[cur] + ' 출근', '오늘 ' + LABEL[cur] + ' 근무 (' + t + ' 알람)');
+      }
+      if (a.eve && a.eve.on && next !== cur) {
+        var n = runLength(team, y, m, d + 1, order, ov);
+        push('eve', y, m, d, a.eve.time, '내일부터 ' + LABEL[next] + ' ' + n + '일',
+          team + '조 내일 ' + LABEL[next] + (next === 'off' ? '' : ' 근무') + ' 시작');
+      }
+      if (a.off && a.off.on && cur === 'off' && prev !== 'off') {
+        var n2 = runLength(team, y, m, d, order, ov);
+        push('off', y, m, d, a.off.time, '오늘부터 휴무 ' + n2 + '일',
+          team + '조 다음 근무: ' + LABEL[myShift(team, y, m, d + n2, order, ov)]);
+      }
+    }
+    out.sort(function (p, q) { return p.at - q.at; });
+    return out;
+  }
+
+  // ---- 캘린더 파일 (.ics, 아이폰·애플워치·구글 캘린더용) ----
+  // 근무일(주간/야간)마다 종일 일정 1개. 알림: 당일 출근 알람 시각, 근무 묶음 첫날은 전날 저녁에도.
+  // 내 근무 변경(overrides)이 있는 날은 휴무여도 일정을 만든다(같은 UID 로 예전 근무 일정을 덮어쓰게).
+  // opt = { team, order, from: Date, to: Date, wake: {day, night} | null, eve: 'HH:MM' | null,
+  //         off: 'HH:MM' | null (휴무 첫날 일정+알림), overrides, stamp: Date (DTSTAMP, 기본 2026-10-31) }
+  function icsText(s) { return String(s).replace(/[\\;,]/g, '\\$&').replace(/\r?\n/g, '\\n'); }
+  // 한 줄 75바이트 이하로 접기 (UTF-8 글자 중간에서 자르지 않음)
+  function icsFold(line) {
+    var out = [], cur = '', n = 0;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line.charAt(i), c = line.charCodeAt(i);
+      if (c >= 0xd800 && c <= 0xdbff) ch += line.charAt(++i);
+      var b = c < 0x80 ? 1 : c < 0x800 ? 2 : c >= 0xd800 && c <= 0xdbff ? 4 : 3;
+      if (n + b > 75) { out.push(cur); cur = ' '; n = 1; }
+      cur += ch; n += b;
+    }
+    out.push(cur);
+    return out.join('\r\n');
+  }
+  function icsStamp(t) {
+    function p(x) { return ('0' + x).slice(-2); }
+    return t.getUTCFullYear() + p(t.getUTCMonth() + 1) + p(t.getUTCDate()) + 'T' + p(t.getUTCHours()) + p(t.getUTCMinutes()) + p(t.getUTCSeconds()) + 'Z';
+  }
+  function icsCalendar(opt) {
+    var team = opt.team, order = opt.order, ov = opt.overrides;
+    var wake = opt.wake === undefined ? DEFAULT_ALARMS.wake : opt.wake;
+    var eve = opt.eve === undefined ? DEFAULT_ALARMS.eve.time : opt.eve, off = opt.off || null;
+    var stamp = icsStamp(opt.stamp || new Date(Date.UTC(2026, 9, 31)));
+    function ymd(y, m, d) { return dateKey(y, m, d).replace(/-/g, ''); }
+    // 종일 일정의 알림은 그날 00:00 기준 상대 시간
+    function trig(t, dayBefore) {
+      var tm = parseTime(t);
+      if (!tm) return null;
+      var min = tm.h * 60 + tm.mi - (dayBefore ? 1440 : 0);
+      var sign = min < 0 ? '-' : '';
+      min = Math.abs(min);
+      return sign + 'PT' + Math.floor(min / 60) + 'H' + (min % 60) + 'M';
+    }
+    var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ShiftCalendar//KO', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'X-WR-CALNAME:' + team + '조 교대근무', 'X-WR-TIMEZONE:Asia/Seoul'];
+    var y = opt.from.getFullYear(), m = opt.from.getMonth(), d0 = opt.from.getDate();
+    var end = Date.UTC(opt.to.getFullYear(), opt.to.getMonth(), opt.to.getDate());
+    function alarm(desc, t) { if (t) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsText(desc), 'TRIGGER:' + t, 'END:VALARM'); }
+    for (var i = 0; Date.UTC(y, m, d0 + i) <= end; i++) {
+      var d = d0 + i, k = myShift(team, y, m, d, order, ov), o = overrideOf(ov, y, m, d);
+      var first = myShift(team, y, m, d - 1, order, ov) !== k;
+      if (k === 'off' && !o && !(off && first)) continue;
+      var n = runLength(team, y, m, d, order, ov);
+      var sum = LABEL[k] + (k === 'off' && first ? ' ' + n + '일' : '') + ' (' + team + '조' + (o ? ' · 변경' : '') + ')';
+      L.push('BEGIN:VEVENT', 'UID:shift-' + team + '-' + ymd(y, m, d) + '@shiftcal', 'DTSTAMP:' + stamp,
+        'DTSTART;VALUE=DATE:' + ymd(y, m, d), 'DTEND;VALUE=DATE:' + ymd(y, m, d + 1),
+        'SUMMARY:' + icsText(sum), 'TRANSP:TRANSPARENT');
+      if (o) L.push('DESCRIPTION:' + icsText('원래 ' + LABEL[shiftOf(team, y, m, d, order)] + (o.memo ? ' · ' + o.memo : '')));
+      if (k === 'off') {
+        if (off && first) alarm('오늘부터 휴무 ' + n + '일', trig(off, false));
+      } else {
+        if (wake) alarm(team + '조 ' + LABEL[k] + ' 출근', trig(k === 'day' ? wake.day : wake.night, false));
+        if (first && eve) alarm('내일부터 ' + LABEL[k] + ' ' + n + '일', trig(eve, true));
+      }
+      L.push('END:VEVENT');
+    }
+    L.push('END:VCALENDAR');
+    return L.map(icsFold).join('\r\n') + '\r\n';
+  }
+
+  var api = {
+    PATTERN: PATTERN, LABEL: LABEL, TEAMS: TEAMS, BASE_TEAM: BASE_TEAM,
+    DEFAULT_ORDER: DEFAULT_ORDER, mod: mod, dayIndex: dayIndex,
+    position: position, shiftOf: shiftOf, allTeams: allTeams, allOrders: allOrders,
+    DEFAULT_ALARMS: DEFAULT_ALARMS, parseTime: parseTime, runLength: runLength,
+    dateKey: dateKey, overrideOf: overrideOf, myShift: myShift, icsCalendar: icsCalendar, alarmEvents: alarmEvents
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.Shift = api;
+})(this);
+</script>
+<script>
+(function () {
+  'use strict';
+  var S = window.Shift;
+  var KEY = 'shiftcal.v1';
+  var cap = window.Capacitor;
+  var native = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+  var Alarm = native ? (cap.Plugins && cap.Plugins.ShiftAlarm) || (cap.registerPlugin && cap.registerPlugin('ShiftAlarm')) : null;
+
+  var st = { team: 'D', order: S.DEFAULT_ORDER.join(''), view: 'mine', alarms: JSON.parse(JSON.stringify(S.DEFAULT_ALARMS)), overrides: {} };
+  // 웹에서는 알람이 울리지 않고 캘린더 내보내기 알림에만 쓰이므로 출근·전날 알림을 기본으로 켠다
+  if (!native) { st.alarms.wake.on = true; st.alarms.eve.on = true; }
+  try {
+    var saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+    if (saved.team) st.team = saved.team;
+    if (saved.order) st.order = saved.order;
+    if (saved.view === 'all') st.view = 'all';
+    if (saved.overrides && typeof saved.overrides === 'object') st.overrides = saved.overrides;
+    if (saved.alarms) ['wake', 'eve', 'off'].forEach(function (k) { if (saved.alarms[k]) Object.assign(st.alarms[k], saved.alarms[k]); });
+  } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }
+
+  var DOW = ['일', '월', '화', '수', '목', '금', '토'];
+  var today, view, sel;
+  function setToday() {
+    var n = new Date();
+    today = { y: n.getFullYear(), m: n.getMonth(), d: n.getDate() };
+  }
+  setToday();
+  view = { y: today.y, m: today.m };
+  sel = Object.assign({}, today);
+
+  function order() { return st.order.split(''); }
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function same(a, b) { return a.y === b.y && a.m === b.m && a.d === b.d; }
+  function norm(y, m, d) { var t = new Date(Date.UTC(y, m, d)); return { y: t.getUTCFullYear(), m: t.getUTCMonth(), d: t.getUTCDate() }; }
+  function dow(o) { return new Date(Date.UTC(o.y, o.m, o.d)).getUTCDay(); }
+  function md(o) { return (o.m + 1) + '/' + o.d + '(' + DOW[dow(o)] + ')'; }
+  // 내 근무 변경은 조마다 따로 저장: st.overrides[조]['YYYY-MM-DD'] = { shift, memo }
+  function ovs(team) { return st.overrides[team] || {}; }
+  function sh(team, o) { return S.myShift(team, o.y, o.m, o.d, order(), ovs(team)); }
+
+  // 그날 이후 처음으로 근무가 바뀌는 날
+  function nextChange(team, o) {
+    var cur = sh(team, o);
+    for (var n = 1; n <= 8; n++) {
+      var t = norm(o.y, o.m, o.d + n), k = sh(team, t);
+      if (k !== cur) return { date: t, shift: k, len: S.runLength(team, t.y, t.m, t.d, order(), ovs(team)) };
+    }
+    return null;
+  }
+
+  // ---- 조 순서 ----
+  var orderSel = $('order');
+  S.allOrders().forEach(function (o) {
+    var op = document.createElement('option'); op.value = o.join(''); op.textContent = o.join(' → ') + ' → ' + o[0];
+    orderSel.appendChild(op);
+  });
+  if (!S.allOrders().some(function (o) { return o.join('') === st.order; })) st.order = S.DEFAULT_ORDER.join('');
+  orderSel.value = st.order;
+  orderSel.addEventListener('change', function () { st.order = orderSel.value; save(); render(); syncAlarms(); });
+
+  document.querySelectorAll('[data-team]').forEach(function (b) {
+    b.addEventListener('click', function () { st.team = b.dataset.team; save(); render(); syncAlarms(); });
+  });
+  $('prev').addEventListener('click', function () { move(-1); });
+  $('next').addEventListener('click', function () { move(1); });
+  $('today').addEventListener('click', function () { setToday(); view = { y: today.y, m: today.m }; sel = Object.assign({}, today); render(); });
+  function move(n) { var t = norm(view.y, view.m + n, 1); view = { y: t.y, m: t.m }; render(); }
+  document.querySelectorAll('[data-view]').forEach(function (b) {
+    b.addEventListener('click', function () { st.view = b.dataset.view; save(); render(); });
+  });
+
+  var sx = null, sy = 0;
+  $('cal').addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  $('cal').addEventListener('touchend', function (e) {
+    if (sx === null) return;
+    var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) move(dx < 0 ? 1 : -1);
+  });
+
+  var GLYPH = {
+    day: '<svg class="glyph" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="24" cy="24" r="8"/><path d="M24 6v5M24 37v5M6 24h5M37 24h5M11.3 11.3l3.5 3.5M33.2 33.2l3.5 3.5M11.3 36.7l3.5-3.5M33.2 14.8l3.5-3.5"/></svg>',
+    night: '<svg class="glyph" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M33 33.5A14 14 0 0 1 18.5 9 14 14 0 1 0 39 29.5a14 14 0 0 1-6 4z"/><path d="M36 10l1 2.5 2.5 1-2.5 1L36 17l-1-2.5-2.5-1 2.5-1z" stroke-width="1.6"/></svg>',
+    off: '<svg class="glyph" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".55"><path d="M10 30c4-6 8-6 14 0s10 6 14 0M10 20c4-6 8-6 14 0s10 6 14 0"/></svg>'
+  };
+
+  function render() {
+    var ord = order();
+    document.querySelectorAll('[data-team]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.team === st.team)); });
+    $('orderWarn').hidden = st.order === S.DEFAULT_ORDER.join('');
+
+    // 오늘 카드
+    var tk = sh(st.team, today);
+    var hero = $('hero');
+    hero.className = 'hero ' + tk;
+    $('hK').textContent = '오늘 ' + (today.m + 1) + '월 ' + today.d + '일 ' + DOW[dow(today)] + '요일 · ' + st.team + '조';
+    var left = S.runLength(st.team, today.y, today.m, today.d, ord, ovs(st.team));
+    $('hBig').innerHTML = S.LABEL[tk] + '<small>' + (left > 1 ? left + '일 연속' : '오늘까지') + '</small>';
+    var nc = nextChange(st.team, today);
+    var tov = S.overrideOf(ovs(st.team), today.y, today.m, today.d);
+    $('hNext').textContent = (tov ? '변경 (원래 ' + S.LABEL[S.shiftOf(st.team, today.y, today.m, today.d, ord)] + ') · ' : '') +
+      (nc ? '다음 ' + md(nc.date) + ' ' + S.LABEL[nc.shift] + ' ' + nc.len + '일' : '');
+    var pos = S.position(st.team, today.y, today.m, today.d, ord);
+    var cyc = '';
+    for (var i = 0; i < 8; i++) {
+      var k = S.PATTERN[i];
+      cyc += '<span class="' + k + (i === pos ? ' cur' : '') + '">' + S.LABEL[k].charAt(0) + '</span>';
+    }
+    $('hCycle').innerHTML = cyc;
+    $('hPos').textContent = '8일 주기 ' + (pos + 1) + '일째';
+    var g = hero.querySelector('.glyph'); if (g) g.remove();
+    hero.insertAdjacentHTML('beforeend', GLYPH[tk]);
+
+    // 달력
+    $('title').innerHTML = '<small>' + view.y + '</small>' + (view.m + 1) + '월';
+    $('today').hidden = view.y === today.y && view.m === today.m && same(sel, today);
+    var allView = st.view === 'all';
+    document.querySelectorAll('[data-view]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.view === st.view)); });
+    var grid = $('grid'); grid.innerHTML = '';
+    var first = new Date(Date.UTC(view.y, view.m, 1)).getUTCDay();
+    var days = new Date(Date.UTC(view.y, view.m + 1, 0)).getUTCDate();
+    var cnt = { day: 0, night: 0, off: 0 }, nChg = 0;
+    for (var b = 0; b < first; b++) { var bl = document.createElement('div'); bl.className = 'cell blank'; grid.appendChild(bl); }
+    for (var d = 1; d <= days; d++) {
+      var o = { y: view.y, m: view.m, d: d };
+      var k2 = sh(st.team, o); cnt[k2]++;
+      var chg = !!S.overrideOf(ovs(st.team), view.y, view.m, d); if (chg) nChg++;
+      var c = document.createElement('button'); c.type = 'button';
+      var w = (first + d - 1) % 7;
+      c.className = 'cell ' + k2 + (w === 0 ? ' sun' : w === 6 ? ' sat' : '') + (same(o, today) ? ' today' : '') + (same(o, sel) ? ' sel' : '') + (chg ? ' chg' : '');
+      var lab = (view.m + 1) + '월 ' + d + '일 ' + S.LABEL[k2] + (chg ? ' (변경)' : '') + (same(o, today) ? ' (오늘)' : '');
+      var body = '<span class="s">' + S.LABEL[k2] + '</span>';
+      if (allView) {
+        // 그날 주간 조·야간 조 (내 조는 변경 반영, 테두리)
+        var at = S.allTeams(view.y, view.m, d, ord), dd = [], nn = [];
+        at[st.team] = k2;
+        S.TEAMS.forEach(function (t) {
+          var b2 = '<b class="' + (at[t] === 'day' ? 'dd' : 'nn') + (t === st.team ? ' me' : '') + '">' + t + '</b>';
+          if (at[t] === 'day') dd.push(b2); else if (at[t] === 'night') nn.push(b2);
+        });
+        body = '<span class="s2">' + dd.join('') + nn.join('') + '</span>';
+        lab += ' · 주간 ' + S.TEAMS.filter(function (t) { return at[t] === 'day'; }).join(',') + '조, 야간 ' +
+          S.TEAMS.filter(function (t) { return at[t] === 'night'; }).join(',') + '조';
+      }
+      c.setAttribute('aria-label', lab);
+      c.innerHTML = '<span class="d">' + d + '</span>' + body;
+      (function (o) { c.addEventListener('click', function () { sel = o; render(); }); })(o);
+      grid.appendChild(c);
+    }
+    $('legend').innerHTML = allView ?
+      '<span><i style="background:var(--day)"></i>주간 조</span><span><i style="background:var(--night)"></i>야간 조</span>' +
+      '<span><i style="box-shadow:0 0 0 1.5px var(--ink)"></i>' + st.team + '조</span>' +
+      (nChg ? '<span><i class="dot"></i>변경 <b>' + nChg + '</b></span>' : '') +
+      '<span style="margin-left:auto">칸 색 = ' + st.team + '조 근무</span>' :
+      '<span><i style="background:var(--day)"></i>주간 <b>' + cnt.day + '</b></span>' +
+      '<span><i style="background:var(--night)"></i>야간 <b>' + cnt.night + '</b></span>' +
+      '<span><i style="background:var(--hair)"></i>휴무 <b>' + cnt.off + '</b></span>' +
+      (nChg ? '<span><i class="dot"></i>변경 <b>' + nChg + '</b></span>' : '') +
+      '<span style="margin-left:auto">' + st.team + '조 · ' + (view.m + 1) + '월</span>';
+
+    // 고른 날
+    var all = S.allTeams(sel.y, sel.m, sel.d, ord);
+    var base = all[st.team], sov = S.overrideOf(ovs(st.team), sel.y, sel.m, sel.d);
+    if (sov) all[st.team] = sov.shift;
+    var diff = Math.round((Date.UTC(sel.y, sel.m, sel.d) - Date.UTC(today.y, today.m, today.d)) / 86400000);
+    var rel = diff === 0 ? '오늘' : diff === 1 ? '내일' : diff === -1 ? '어제' : diff > 0 ? diff + '일 뒤' : (-diff) + '일 전';
+    $('dTitle').innerHTML = sel.y + '. ' + (sel.m + 1) + '. ' + sel.d + '. (' + DOW[dow(sel)] + ')<span>' + rel + '</span>';
+    $('dRows').innerHTML = S.TEAMS.map(function (t) {
+      return '<div class="tm ' + all[t] + (t === st.team ? ' mine' : '') + '"><div class="t">' + t + '조' + (t === st.team ? ' · 나' : '') +
+        '</div><div class="v">' + S.LABEL[all[t]] + '</div>' + (t === st.team && sov ? '<span class="chg">변경</span>' : '') + '</div>';
+    }).join('');
+    var nc2 = nextChange(st.team, sel);
+    $('dNext').innerHTML = esc(st.team + '조 ' + S.LABEL[all[st.team]] + (nc2 ? ' → ' + md(nc2.date) + '부터 ' + S.LABEL[nc2.shift] + ' ' + nc2.len + '일' : '')) +
+      (sov ? ' · <b>변경됨 (원래 ' + S.LABEL[base] + (sov.memo ? ', ' + esc(sov.memo) : '') + ')</b>' : '');
+
+    // 내 근무 변경 시트
+    $('ovDate').textContent = (sel.m + 1) + '월 ' + sel.d + '일 (' + DOW[dow(sel)] + ') ' + st.team + '조';
+    document.querySelectorAll('[data-ov]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.ov === all[st.team])); });
+    $('ovrState').textContent = sov ? '변경됨 · 원래 ' + S.LABEL[base] : '';
+    var memo = $('ovrMemo');
+    if (document.activeElement !== memo) memo.value = sov && sov.memo ? sov.memo : '';
+    memo.disabled = !sov; $('ovrReset').disabled = !sov;
+    $('ovrHint').textContent = (sov ? st.team + '조 원래 근무는 ' + S.LABEL[base] + '입니다. ' : '대근·연차가 생기면 근무를 바꾸세요. ') +
+      (native ? '알람도 바뀐 근무대로 울립니다.' : '달력에 빨간 점으로 표시됩니다.');
+    if (!$('exSheet').hidden) renderExport();
+  }
+
+  // ---- 내 근무 변경 ----
+  function setOverride(shift, memo) {
+    var key = S.dateKey(sel.y, sel.m, sel.d), map = st.overrides[st.team] || (st.overrides[st.team] = {});
+    var base = S.shiftOf(st.team, sel.y, sel.m, sel.d, order());
+    if (!shift || shift === base) delete map[key]; // 원래 근무로 고르면 변경 취소
+    else map[key] = { shift: shift, memo: memo || '' };
+    save(); render(); syncAlarms();
+  }
+  document.querySelectorAll('[data-ov]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var cur = S.overrideOf(ovs(st.team), sel.y, sel.m, sel.d);
+      setOverride(b.dataset.ov, cur ? cur.memo : '');
+    });
+  });
+  $('ovrReset').addEventListener('click', function () { setOverride(null); });
+  $('ovrMemo').addEventListener('change', function () {
+    var cur = S.overrideOf(ovs(st.team), sel.y, sel.m, sel.d);
+    if (cur) setOverride(cur.shift, $('ovrMemo').value.trim());
+  });
+
+  // ---- 시트 (근무 변경 / 캘린더 내보내기 / 설정): 한 번에 하나 ----
+  var SHEETS = ['ovSheet', 'exSheet', 'sheet'], opener = null;
+  function openSheet(id) {
+    SHEETS.forEach(function (s) { $(s).hidden = s !== id; });
+    $('scrim').hidden = !id;
+    if (!id) { if (opener) opener.focus(); opener = null; return; }
+    if (!opener) opener = document.activeElement;
+    if (id === 'sheet') refreshStatus();
+    if (id === 'exSheet') { $('exMsg').hidden = true; renderExport(); }
+    var f = $(id).querySelector('[data-close]'); if (f) f.focus();
+  }
+  $('openSet').addEventListener('click', function () { openSheet('sheet'); });
+  $('openEx').addEventListener('click', function () { openSheet('exSheet'); });
+  $('openOv').addEventListener('click', function () { openSheet('ovSheet'); });
+  $('ovToEx').addEventListener('click', function () { openSheet('exSheet'); });
+  $('exToSet').addEventListener('click', function () { openSheet('sheet'); });
+  document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { openSheet(null); }); });
+  $('scrim').addEventListener('click', function () { openSheet(null); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') openSheet(null); });
+
+  // ---- 캘린더 내보내기 (.ics): 이번 달 1일부터 2년, 내 근무 변경 반영, 알림은 설정의 시각 ----
+  var EX_MONTHS = 24;
+  function exRange() {
+    var n = new Date();
+    return { from: new Date(n.getFullYear(), n.getMonth(), 1), to: new Date(n.getFullYear(), n.getMonth() + EX_MONTHS, 0) };
+  }
+  function ymText(t) { return t.getFullYear() + '. ' + (t.getMonth() + 1) + '.'; }
+  function renderExport() {
+    var r = exRange(), a = st.alarms, from = S.dateKey(r.from.getFullYear(), r.from.getMonth(), 1);
+    $('exTeam').textContent = st.team + '조';
+    $('exRange').textContent = ymText(r.from) + ' ~ ' + ymText(r.to) + ' (2년)';
+    var n = Object.keys(ovs(st.team)).filter(function (k) { return k >= from; }).length;
+    $('exOv').textContent = n ? n + '일 반영' : '없음';
+    var al = [];
+    if (a.wake.on) al.push('출근 ' + a.wake.day + ' / ' + a.wake.night);
+    if (a.eve.on) al.push('전날 ' + a.eve.time);
+    if (a.off.on) al.push('휴무 첫날 ' + a.off.time);
+    $('exAlarm').textContent = al.length ? al.join(', ') : '없음 (일정만)';
+    $('exGoTxt').textContent = native ? '캘린더 파일 보내기' : '캘린더 파일 받기 (대근 반영)';
+    // 공개 웹 주소에서 열었을 때만: 조별 구독 주소(cal/X.ics, make-site.js 가 만듦)와 APK
+    var hosted = !native && !framed() && /^https?:$/.test(location.protocol);
+    $('hostBox').hidden = !hosted;
+    if (hosted) {
+      $('subLink').href = subUrl().replace(/^https?:/, 'webcal:');
+      $('subTxt').textContent = st.team + '조 근무표 구독하기';
+    }
+  }
+  function subUrl() { return new URL('cal/' + st.team + '.ics', location.href).href; }
+  $('subCopy').addEventListener('click', function () {
+    var u = subUrl(), b = $('subCopy');
+    function done(ok) { b.textContent = ok ? '복사했습니다: ' + u : u; }
+    if (navigator.clipboard) navigator.clipboard.writeText(u).then(function () { done(true); }, function () { done(false); });
+    else done(false);
+  });
+  function exMsg(ok, text) { var m = $('exMsg'); m.hidden = false; m.className = 'msg ' + (ok ? 'ok' : 'bad'); m.textContent = text; }
+  function framed() { try { return window.self !== window.top; } catch (e) { return true; } }
+  $('exGo').addEventListener('click', function () {
+    var r = exRange(), a = st.alarms;
+    var ics = S.icsCalendar({
+      team: st.team, order: order(), from: r.from, to: r.to, overrides: ovs(st.team), stamp: new Date(),
+      wake: a.wake.on ? a.wake : null, eve: a.eve.on ? a.eve.time : null, off: a.off.on ? a.off.time : null
+    });
+    var name = '교대근무_' + st.team + '조.ics';
+    if (Alarm && Alarm.shareFile) {
+      Alarm.shareFile({ filename: name, text: ics }).then(function () {
+        exMsg(true, '카톡으로 아이폰 쓰는 사람에게 보내거나, 캘린더 앱으로 열어 추가하세요.');
+      }, function (e) { exMsg(false, (e && e.message) || '파일을 보낼 수 없습니다.'); });
+      return;
+    }
+    if (framed()) {
+      // claude.ai 링크 같은 다른 페이지 안에서는 다운로드가 막힌다
+      exMsg(false, '이 링크 안에서는 파일을 받을 수 없습니다. 공개 웹 주소(브라우저에서 직접 연 달력)나 안드로이드 앱에서 하세요.');
+      return;
+    }
+    try {
+      var url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+      var link = document.createElement('a');
+      link.href = url; link.download = name; link.rel = 'noopener';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      exMsg(true, name + ' 파일을 만들었습니다. 받은 파일을 눌러 캘린더에 추가하세요.');
+    } catch (e) {
+      exMsg(false, '이 화면에서는 파일을 만들 수 없습니다.');
+    }
+  });
+
+  var F = {
+    aWake: ['wake', 'on'], aWakeDay: ['wake', 'day'], aWakeNight: ['wake', 'night'],
+    aEve: ['eve', 'on'], aEveTime: ['eve', 'time'], aOff: ['off', 'on'], aOffTime: ['off', 'time']
+  };
+  Object.keys(F).forEach(function (id) {
+    var el = $(id), f = F[id];
+    if (el.type === 'checkbox') el.checked = !!st.alarms[f[0]][f[1]]; else el.value = st.alarms[f[0]][f[1]];
+    el.addEventListener('change', function () {
+      if (el.type === 'checkbox') st.alarms[f[0]][f[1]] = el.checked;
+      else if (S.parseTime(el.value)) st.alarms[f[0]][f[1]] = el.value;
+      save();
+      if (!native) return;
+      if (el.type === 'checkbox' && el.checked && Alarm) Alarm.requestNotifications().then(syncAlarms, syncAlarms);
+      else syncAlarms();
+    });
+  });
+
+  function anyOn() { return st.alarms.wake.on || st.alarms.eve.on || st.alarms.off.on; }
+
+  var lastStatus = null;
+  function syncAlarms() {
+    if (!Alarm) return;
+    var ev = anyOn() ? S.alarmEvents({ team: st.team, order: order(), alarms: st.alarms, overrides: ovs(st.team) }, new Date(), 366) : [];
+    Alarm.setSchedule({ events: ev }).then(function (r) { lastStatus = r; showStatus(); }, function () {});
+  }
+  function refreshStatus() {
+    if (!Alarm) { showStatus(); return; }
+    Alarm.getStatus().then(function (r) { lastStatus = r; showStatus(); }, function () {});
+  }
+  function showStatus() {
+    var box = $('aStatus');
+    if (!native) {
+      box.innerHTML = '<span class="webonly">웹에서는 알람이 울리지 않습니다.</span> 여기 시각은 <b>캘린더로 내보내기</b> 파일의 알림(아이폰·애플워치)에 쓰입니다. 안드로이드는 앱을 설치하면 알람이 울립니다.';
+      return;
+    }
+    var r = lastStatus || {}, h = [];
+    if (r.nextAt) {
+      var t = new Date(r.nextAt), o = { y: t.getFullYear(), m: t.getMonth(), d: t.getDate() };
+      h.push('<div class="nextA">다음: ' + md(o) + ' ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ' · ' + r.nextTitle + '</div>');
+    } else {
+      h.push('<div>' + (anyOn() ? '예약된 알람 없음' : '켜진 알람 없음') + '</div>');
+    }
+    var btns = [];
+    if (r.notifications === false) { h.push('<div class="warn">알림이 꺼져 있어 알람이 표시되지 않습니다.</div>'); btns.push('<button type="button" class="btn" data-open="app">알림 허용</button>'); }
+    if (r.exact === false) { h.push('<div class="warn">정확한 알람 권한이 없어 몇 분 늦게 울릴 수 있습니다.</div>'); btns.push('<button type="button" class="btn" data-open="exact">정확한 알람 허용</button>'); }
+    if (r.fullScreen === false && st.alarms.wake.on) { h.push('<div class="warn">잠금 화면 전체 알람이 꺼져 있어 알림으로만 울립니다.</div>'); btns.push('<button type="button" class="btn" data-open="fullscreen">전체 화면 허용</button>'); }
+    btns.push('<button type="button" class="btn primary" id="testBtn">10초 뒤 시험 알람</button>');
+    h.push('<div class="btnrow">' + btns.join('') + '</div>');
+    box.innerHTML = h.join('');
+    box.querySelectorAll('[data-open]').forEach(function (b) {
+      b.addEventListener('click', function () { Alarm.openSettings({ which: b.dataset.open }); });
+    });
+    $('testBtn').addEventListener('click', function () {
+      Alarm.requestNotifications().then(function () { return Alarm.test({ seconds: 10 }); })
+        .then(function (r2) { lastStatus = r2; showStatus(); $('testBtn').textContent = '10초 뒤 울립니다'; }, function () {});
+    });
+  }
+
+  // 앱으로 돌아올 때 날짜·알람 갱신 (자정 넘김, 권한 변경)
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') return;
+    var old = today; setToday();
+    if (!same(old, today)) { sel = Object.assign({}, today); view = { y: today.y, m: today.m }; render(); }
+    syncAlarms();
+  });
+
+  render();
+  showStatus();
+  syncAlarms();
+})();
+</script>
+
+</html>
