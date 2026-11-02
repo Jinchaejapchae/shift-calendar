@@ -75,7 +75,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
       <li>05:30 · 레이블 <b>주간</b> · 반복 <b>안 함</b> → 저장</li>
       <li>17:30 · 레이블 <b>야간</b> · 반복 <b>안 함</b> → 저장</li>
     </ol>
-    <p class="note">시각·소리는 원하는 대로, 나중에 바꿀 때도 시계 앱에서 (야간은 18:00 전으로). <b>레이블은 글자 그대로 주간, 야간</b>이어야 합니다. 단축어가 이 이름으로 알람을 찾습니다.</p>
+    <p class="note">시각·소리는 원하는 대로 (야간은 18:00 전으로). 나중에는 시계 앱이나 달력 앱에서 바꿉니다. <b>레이블은 글자 그대로 주간, 야간</b>이어야 합니다. 단축어가 이 이름으로 알람을 찾습니다.</p>
   </div>
 
   <div class="card">
@@ -86,6 +86,8 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
         <li>열리는 화면에서 <b>단축어 추가</b></li>
         <li>추가가 안 되면(아이폰 버전이 낮은 경우) 아래 <b>직접 만들기</b>로</li>
       </ol>
+      <a class="get" id="getTimeLink" href="#" style="margin-top:12px">단축어 「교대시각」 받기 (웹앱에서 시각 바꿀 때)</a>
+      <p class="note">기상 시각을 달력 앱에서 바꾸려면 이것도 추가하세요. 시계 앱에서 직접 바꾸는 사람은 없어도 됩니다.</p>
     </div>
     <p id="noLink" class="note" style="margin:0">받기 링크가 아직 없어서 직접 만듭니다 (약 10분). 아래 <b>직접 만들기</b>를 펼치세요.</p>
     <details id="manual">
@@ -152,6 +154,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
     <ul>
       <li>그냥 두면 됩니다. 매일 밤 9시에 내일 알람이 맞춰집니다.</li>
       <li>대근·연차를 바꾸면 달력 앱 위에 알림 줄이 뜹니다 → <span class="ui">시계 알람에 반영</span> 한 번.</li>
+      <li>기상 시각: 달력 앱 설정에서 출근 시각을 바꾸고 <span class="ui">시계 알람에 반영</span> (「교대시각」 필요). 알람을 새로 만드는 방식이라 알람 소리는 기본으로 돌아갑니다. 시계 앱에서 시간만 바꿔도 됩니다 (이름은 그대로).</li>
       <li>잠시 쉬려면 같은 스위치를 <b>끄기</b>. 알람이 꺼지고 밤에도 꺼진 채로 있습니다. 다시 켜면 근무표대로.</li>
       <li>야간 알람을 18:00 이후로 정했다면, 18:00부터 그 알람 전까지는 [반영]을 누르지 마세요 (내일 기준으로 맞춰져서 오늘 알람이 꺼질 수 있음).</li>
       <li class="warn">캘린더 구독도 해 두었다면 짧은 캘린더 알림이 같이 옵니다. 싫으면 설정 → 캘린더 → 계정 → 구독한 캘린더 → <b>알림 제거</b>.</li>
@@ -161,8 +164,10 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
 <script>
 // iCloud 공유 링크 (단축어 앱에서 「교대알람」 길게 누르기 → 공유 → iCloud 링크 복사). 비어 있으면 직접 만들기 안내
 var SHORTCUT_LINK = 'https://www.icloud.com/shortcuts/99dad16610ac4bc5a5f1696cabaac53a';
+var TIME_LINK = 'https://www.icloud.com/shortcuts/087b0fb98abc4cd3ba7c8a4675d49555'; // 교대시각
 if (/^https:\/\/www\.icloud\.com\/shortcuts\//.test(SHORTCUT_LINK)) {
   document.getElementById('getLink').href = SHORTCUT_LINK;
+  document.getElementById('getTimeLink').href = TIME_LINK;
   document.getElementById('getBox').hidden = false;
   document.getElementById('noLink').hidden = true;
 } else {
