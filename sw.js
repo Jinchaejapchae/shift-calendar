@@ -1,4 +1,4 @@
-var CACHE = 'shiftcal-f75bd54421';
+var CACHE = 'shiftcal-47e959d892';
 var CORE = ["./","index.html","iphone-alarm.html","manifest.webmanifest","icon.svg","icon-180.png","icon-192.png","icon-512.png"];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(CORE); }).then(function () { return self.skipWaiting(); }));

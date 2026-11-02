@@ -652,8 +652,10 @@ a.btn.primary { color: var(--surface); }
   // 아이폰 단축어용 근무표 글자: 'SHIFTCAL1 D 20261102O 20261103O 20261104N ...' (변경 반영, from 부터 days 일)
   // 단축어는 '내일날짜+D/N/O' 가 들어 있는지만 본다. D=주간 N=야간 O=휴무. 없으면 기간이 끝난 것
   var PLAN_CODE = { day: 'D', night: 'N', off: 'O' };
-  function alarmPlan(team, order, overrides, from, days) {
+  // times = { day, night } 를 주면 머리에 DAY=05:30 NIGHT=17:30 (시계 알람 시각을 바꿀 때만)
+  function alarmPlan(team, order, overrides, from, days, times) {
     var y = from.getFullYear(), m = from.getMonth(), d = from.getDate(), out = ['SHIFTCAL1', team];
+    if (times) out.push('DAY=' + times.day, 'NIGHT=' + times.night);
     for (var i = 0; i < days; i++) out.push(dateKey(y, m, d + i).replace(/-/g, '') + PLAN_CODE[myShift(team, y, m, d + i, order, overrides)]);
     return out.join(' ');
   }
@@ -687,7 +689,7 @@ a.btn.primary { color: var(--surface); }
     // 조 순서는 사용자가 설정에서 직접 고른 경우만 따른다. 예전 판은 기본값(D→A→B→C, 틀렸던 순서)도 저장했으므로 무시
     if (saved.order && saved.orderSet) { st.order = saved.order; st.orderSet = true; }
     if (saved.view === 'all') st.view = 'all';
-    if (saved.ios && typeof saved.ios === 'object') st.ios = { on: !!saved.ios.on, sent: saved.ios.sent || null };
+    if (saved.ios && typeof saved.ios === 'object') st.ios = { on: !!saved.ios.on, sent: saved.ios.sent || null, times: saved.ios.times || null };
     if (saved.overrides && typeof saved.overrides === 'object') st.overrides = saved.overrides;
     if (saved.alarms) ['wake', 'eve', 'off'].forEach(function (k) { if (saved.alarms[k]) Object.assign(st.alarms[k], saved.alarms[k]); });
   } catch (e) {}
@@ -913,19 +915,25 @@ a.btn.primary { color: var(--surface); }
     var p = /^(\d{4})(\d\d)(\d\d)$/.exec(until || '');
     return p ? Math.round((Date.UTC(+p[1], p[2] - 1, +p[3]) - Date.UTC(today.y, today.m, today.d)) / 86400000) : -1;
   }
+  // 시계 알람 시각: 마지막으로 맞춘 시각(st.ios.times)과 다를 때만 보낸다. 처음에는 시계 앱 시각을 건드리지 않고 지금 값을 기준으로 삼는다
+  function curTimes() { return { day: st.alarms.wake.day, night: st.alarms.wake.night }; }
+  function timesChanged() { var t = st.ios.times; return !!t && (t.day !== st.alarms.wake.day || t.night !== st.alarms.wake.night); }
   function iosNeed() { // 다시 보내야 하는 이유, 없으면 ''
     var s = st.ios.sent;
     if (!s) return '아직 시계 알람에 반영하지 않았어요.';
+    if (timesChanged()) return '바꾼 출근 시각이 아이폰 시계 알람에 아직 반영되지 않았어요.';
     if (s.sig !== iosSig()) return '근무 변경이 아이폰 시계 알람에 아직 반영되지 않았어요.';
     if (daysLeft(s.until) < IOS_WARN_DAYS) return '아이폰 알람용 근무표가 곧 끝나요. 한 번 더 반영해 주세요.';
     return '';
   }
   // allOff: 스위치를 끌 때. 앞으로 전부 휴무(O)인 근무표를 보내서 단축어가 알람을 끄고, 밤마다 꺼 둔 채로 두게 한다
   function iosSend(allOff) {
-    var from = new Date(today.y, today.m, today.d), plan = S.alarmPlan(st.team, order(), ovs(st.team), from, IOS_DAYS);
+    var from = new Date(today.y, today.m, today.d), sendTimes = allOff !== true && timesChanged();
+    var plan = S.alarmPlan(st.team, order(), ovs(st.team), from, IOS_DAYS, sendTimes ? curTimes() : null);
     if (allOff === true) plan = plan.replace(/(\d{8})[DN]/g, '$1O');
     var end = new Date(today.y, today.m, today.d + IOS_DAYS - 1);
     st.ios.sent = { sig: allOff === true ? 'OFF' : iosSig(), until: S.dateKey(end.getFullYear(), end.getMonth(), end.getDate()).replace(/-/g, ''), at: Date.now() };
+    if (sendTimes || !st.ios.times) st.ios.times = curTimes();
     save(); renderIos();
     // 단축어는 클립보드에서 읽는다 (iOS 버전에 따라 '단축어 입력' 설정 메뉴가 없어서). 입력으로도 같이 넘긴다
     var url = 'shortcuts://run-shortcut?name=' + encodeURIComponent(IOS_SHORTCUT) + '&input=text&text=' + encodeURIComponent(plan);
@@ -947,7 +955,7 @@ a.btn.primary { color: var(--surface); }
         h.push('<div class="nextA">마지막 반영: ' + (t.getMonth() + 1) + '/' + t.getDate() + ' ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ' · ' + until + '까지</div>');
       }
       if (need) h.push('<div class="warn">' + esc(need) + '</div>');
-      h.push('<div>근무를 바꾸면 위쪽에 알림 줄이 뜹니다. 누르면 단축어 앱이 잠깐 열렸다가 반영돼요. 알람 시각은 시계 앱에서 정합니다.</div>');
+      h.push('<div>근무를 바꾸면 위쪽에 알림 줄이 뜹니다. 누르면 단축어 앱이 잠깐 열렸다가 반영돼요. 아래 출근 시각을 바꾸면 시계 알람 시각도 함께 바뀝니다(새 단축어 필요). 야간은 18:00 전으로 두세요.</div>');
       h.push('<div class="btnrow"><button type="button" class="btn primary" id="iosGo">지금 시계 알람에 반영</button><a class="btn" href="iphone-alarm.html">처음 설정 방법</a></div>');
     } else {
       h.push('<div>' + (s && s.sig === 'OFF' ? '꺼짐: 시계 알람 2개를 껐고, 밤 9시 자동화도 계속 꺼 둡니다. 다시 켜면 근무표대로 돌아옵니다. ' : '아이폰에서 시계 앱 알람(끝까지 울림)을 쓰려면 켜세요. ') + '<a href="iphone-alarm.html">처음 설정 방법 (단축어 1개 + 자동화)</a></div>');
@@ -1036,7 +1044,7 @@ a.btn.primary { color: var(--surface); }
       if (el.type === 'checkbox') st.alarms[f[0]][f[1]] = el.checked;
       else if (S.parseTime(el.value)) st.alarms[f[0]][f[1]] = el.value;
       save();
-      if (!native) return;
+      if (!native) { renderIos(); return; }
       if (el.type === 'checkbox' && el.checked && Alarm) Alarm.requestNotifications().then(syncAlarms, syncAlarms);
       else syncAlarms();
     });
