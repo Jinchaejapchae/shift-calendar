@@ -590,12 +590,52 @@ a.btn.primary { color: var(--surface); }
     return L.map(icsFold).join('\r\n') + '\r\n';
   }
 
+  // 끝없는 캘린더 (구독용): 근무가 8일마다 같으므로 반복 일정(RRULE 8일 간격) 4개로 표현한다.
+  // 주간 첫날·둘째 날, 야간 첫날·둘째 날. 첫날에는 전날 저녁 알림. 기간이 없어서 갱신할 필요가 없다.
+  // 내 근무 변경은 넣지 않는다 (조 전체가 같은 근무표). opt = { team, order, wake, eve, stamp }
+  function icsRecurring(opt) {
+    var team = opt.team, order = opt.order || DEFAULT_ORDER;
+    var wake = opt.wake === undefined ? DEFAULT_ALARMS.wake : opt.wake;
+    var eve = opt.eve === undefined ? DEFAULT_ALARMS.eve.time : opt.eve;
+    var stamp = icsStamp(opt.stamp || new Date(Date.UTC(2026, 9, 31)));
+    function trig(t, dayBefore) {
+      var tm = parseTime(t);
+      if (!tm) return null;
+      var min = tm.h * 60 + tm.mi - (dayBefore ? 1440 : 0), sign = min < 0 ? '-' : '';
+      min = Math.abs(min);
+      return sign + 'PT' + Math.floor(min / 60) + 'H' + (min % 60) + 'M';
+    }
+    // 2026-09-01 이후 이 조의 주기 첫날 (주간 첫날)
+    var s = 0;
+    while (position(team, 2026, 8, 1 + s, order) !== 0) s++;
+    var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ShiftCalendar//KO', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'X-WR-CALNAME:' + team + '조 교대근무', 'X-WR-TIMEZONE:Asia/Seoul'];
+    for (var p = 0; p < PATTERN.length; p++) {
+      var k = PATTERN[p];
+      if (k === 'off') continue;
+      var first = PATTERN[(p + 7) % 8] !== k;
+      var n = 1;
+      while (PATTERN[(p + n) % 8] === k) n++;
+      var d = dateKey(2026, 8, 1 + s + p).replace(/-/g, ''), d2 = dateKey(2026, 8, 2 + s + p).replace(/-/g, '');
+      L.push('BEGIN:VEVENT', 'UID:shift-' + team + '-r' + p + '@shiftcal', 'DTSTAMP:' + stamp,
+        'DTSTART;VALUE=DATE:' + d, 'DTEND;VALUE=DATE:' + d2, 'RRULE:FREQ=DAILY;INTERVAL=8',
+        'SUMMARY:' + LABEL[k] + ' (' + team + '조)', 'TRANSP:TRANSPARENT');
+      var tw = wake ? trig(k === 'day' ? wake.day : wake.night, false) : null;
+      if (tw) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + team + '조 ' + LABEL[k] + ' 출근', 'TRIGGER:' + tw, 'END:VALARM');
+      var te = first && eve ? trig(eve, true) : null;
+      if (te) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:내일부터 ' + LABEL[k] + ' ' + n + '일', 'TRIGGER:' + te, 'END:VALARM');
+      L.push('END:VEVENT');
+    }
+    L.push('END:VCALENDAR');
+    return L.map(icsFold).join('\r\n') + '\r\n';
+  }
+
   var api = {
     PATTERN: PATTERN, LABEL: LABEL, TEAMS: TEAMS, BASE_TEAM: BASE_TEAM,
     DEFAULT_ORDER: DEFAULT_ORDER, mod: mod, dayIndex: dayIndex,
     position: position, shiftOf: shiftOf, allTeams: allTeams, allOrders: allOrders,
     DEFAULT_ALARMS: DEFAULT_ALARMS, parseTime: parseTime, runLength: runLength,
-    dateKey: dateKey, overrideOf: overrideOf, myShift: myShift, icsCalendar: icsCalendar, alarmEvents: alarmEvents
+    dateKey: dateKey, overrideOf: overrideOf, myShift: myShift, icsCalendar: icsCalendar, icsRecurring: icsRecurring, alarmEvents: alarmEvents
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Shift = api;
@@ -830,8 +870,8 @@ a.btn.primary { color: var(--surface); }
   $('scrim').addEventListener('click', function () { openSheet(null); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') openSheet(null); });
 
-  // ---- 캘린더 내보내기 (.ics): 이번 달 1일부터 2년, 내 근무 변경 반영, 알림은 설정의 시각 ----
-  var EX_MONTHS = 24;
+  // ---- 캘린더 내보내기 (.ics): 이번 달 1일부터 5년, 내 근무 변경 반영, 알림은 설정의 시각 ----
+  var EX_MONTHS = 60;
   function exRange() {
     var n = new Date();
     return { from: new Date(n.getFullYear(), n.getMonth(), 1), to: new Date(n.getFullYear(), n.getMonth() + EX_MONTHS, 0) };
@@ -840,7 +880,7 @@ a.btn.primary { color: var(--surface); }
   function renderExport() {
     var r = exRange(), a = st.alarms, from = S.dateKey(r.from.getFullYear(), r.from.getMonth(), 1);
     $('exTeam').textContent = st.team + '조';
-    $('exRange').textContent = ymText(r.from) + ' ~ ' + ymText(r.to) + ' (2년)';
+    $('exRange').textContent = ymText(r.from) + ' ~ ' + ymText(r.to) + ' (' + EX_MONTHS / 12 + '년)';
     var n = Object.keys(ovs(st.team)).filter(function (k) { return k >= from; }).length;
     $('exOv').textContent = n ? n + '일 반영' : '없음';
     var al = [];
