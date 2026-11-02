@@ -84,7 +84,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
       <a class="get" id="getLink" href="#">단축어 받기</a>
       <ol class="note" style="padding-left:20px">
         <li>열리는 화면에서 <b>단축어 추가</b></li>
-        <li>추가가 안 되면(아이폰 버전이 낮은 경우) 아래 <b>직접 만들기</b>로</li>
+        <li>추가나 실행이 안 되면(아이폰 버전이 낮은 경우) <a href="https://www.icloud.com/shortcuts/99dad16610ac4bc5a5f1696cabaac53a">이전 방식 단축어</a>를 받거나 아래 <b>직접 만들기</b>로</li>
       </ol>
       <a class="get" id="getTimeLink" href="#" style="margin-top:12px">단축어 「교대시각」 받기 (웹앱에서 시각 바꿀 때)</a>
       <p class="note">기상 시각을 달력 앱에서 바꾸려면 이것도 추가하세요. 시계 앱에서 직접 바꾸는 사람은 없어도 됩니다.</p>
@@ -163,7 +163,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
 </div>
 <script>
 // iCloud 공유 링크 (단축어 앱에서 「교대알람」 길게 누르기 → 공유 → iCloud 링크 복사). 비어 있으면 직접 만들기 안내
-var SHORTCUT_LINK = 'https://www.icloud.com/shortcuts/99dad16610ac4bc5a5f1696cabaac53a';
+var SHORTCUT_LINK = 'https://www.icloud.com/shortcuts/8b7770d0a4df4e57b90a992e19407d41';
 var TIME_LINK = 'https://www.icloud.com/shortcuts/087b0fb98abc4cd3ba7c8a4675d49555'; // 교대시각
 if (/^https:\/\/www\.icloud\.com\/shortcuts\//.test(SHORTCUT_LINK)) {
   document.getElementById('getLink').href = SHORTCUT_LINK;
