@@ -366,7 +366,7 @@ a.btn.primary { color: var(--surface); }
         <h4>아이폰 시계 알람 (단축어)</h4>
         <div class="group">
           <div class="item">
-            <div class="txt"><div class="nm">시계 앱 알람을 근무표대로</div><div class="ds">대근·연차까지 반영해 매일 밤 내일 알람을 켜고 끔. 처음에 단축어를 한 번 만들어야 함</div></div>
+            <div class="txt"><div class="nm">시계 앱 알람을 근무표대로</div><div class="ds">대근·연차까지 반영해 매일 밤 내일 알람을 켜고 끔. 끄면 시계 알람 2개도 꺼짐. 처음에 단축어를 한 번 만들어야 함</div></div>
             <label class="sw"><input type="checkbox" id="iosOn" aria-label="아이폰 시계 알람 사용"><i></i></label>
           </div>
           <div class="status" id="iosStatus"></div>
@@ -919,10 +919,12 @@ a.btn.primary { color: var(--surface); }
     if (daysLeft(s.until) < IOS_WARN_DAYS) return '아이폰 알람용 근무표가 곧 끝나요. 한 번 더 반영해 주세요.';
     return '';
   }
-  function iosSend() {
+  // allOff: 스위치를 끌 때. 앞으로 전부 휴무(O)인 근무표를 보내서 단축어가 알람을 끄고, 밤마다 꺼 둔 채로 두게 한다
+  function iosSend(allOff) {
     var from = new Date(today.y, today.m, today.d), plan = S.alarmPlan(st.team, order(), ovs(st.team), from, IOS_DAYS);
+    if (allOff === true) plan = plan.replace(/(\d{8})[DN]/g, '$1O');
     var end = new Date(today.y, today.m, today.d + IOS_DAYS - 1);
-    st.ios.sent = { sig: iosSig(), until: S.dateKey(end.getFullYear(), end.getMonth(), end.getDate()).replace(/-/g, ''), at: Date.now() };
+    st.ios.sent = { sig: allOff === true ? 'OFF' : iosSig(), until: S.dateKey(end.getFullYear(), end.getMonth(), end.getDate()).replace(/-/g, ''), at: Date.now() };
     save(); renderIos();
     // 단축어는 클립보드에서 읽는다 (iOS 버전에 따라 '단축어 입력' 설정 메뉴가 없어서). 입력으로도 같이 넘긴다
     var url = 'shortcuts://run-shortcut?name=' + encodeURIComponent(IOS_SHORTCUT) + '&input=text&text=' + encodeURIComponent(plan);
@@ -947,12 +949,13 @@ a.btn.primary { color: var(--surface); }
       h.push('<div>근무를 바꾸면 위쪽에 알림 줄이 뜹니다. 누르면 단축어 앱이 잠깐 열렸다가 반영돼요. 알람 시각은 시계 앱에서 정합니다.</div>');
       h.push('<div class="btnrow"><button type="button" class="btn primary" id="iosGo">지금 시계 알람에 반영</button><a class="btn" href="iphone-alarm.html">처음 설정 방법</a></div>');
     } else {
-      h.push('<div>아이폰에서 시계 앱 알람(끝까지 울림)을 쓰려면 켜세요. <a href="iphone-alarm.html">처음 설정 방법 (단축어 2개, 약 10분)</a></div>');
+      h.push('<div>' + (s && s.sig === 'OFF' ? '꺼짐: 시계 알람 2개를 껐고, 밤 9시 자동화도 계속 꺼 둡니다. 다시 켜면 근무표대로 돌아옵니다. ' : '아이폰에서 시계 앱 알람(끝까지 울림)을 쓰려면 켜세요. ') + '<a href="iphone-alarm.html">처음 설정 방법 (단축어 2개, 약 15분)</a></div>');
     }
     $('iosStatus').innerHTML = h.join('');
     if ($('iosGo')) $('iosGo').addEventListener('click', iosSend);
   }
-  $('iosOn').addEventListener('change', function () { st.ios.on = $('iosOn').checked; save(); renderIos(); });
+  // 켜면 지금 근무표를, 끄면 전부 휴무를 바로 보낸다 (단축어 앱이 열림)
+  $('iosOn').addEventListener('change', function () { st.ios.on = $('iosOn').checked; save(); iosSend(!st.ios.on); });
   $('iosBarGo').addEventListener('click', iosSend);
 
   // ---- 캘린더 내보내기 (.ics): 이번 달 1일부터 5년, 내 근무 변경 반영, 알림은 설정의 시각 ----
