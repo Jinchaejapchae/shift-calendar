@@ -75,7 +75,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
       <li>05:30 · 레이블 <b>주간</b> · 반복 <b>안 함</b> → 저장</li>
       <li>17:30 · 레이블 <b>야간</b> · 반복 <b>안 함</b> → 저장</li>
     </ol>
-    <p class="note">시각·소리는 원하는 대로. 이름(레이블)만 주간/야간으로.</p>
+    <p class="note">시각·소리는 원하는 대로. <b>레이블은 글자 그대로 주간, 야간</b>이어야 합니다. 단축어가 이 이름으로 알람을 찾습니다.</p>
   </div>
 
   <div class="card">
@@ -84,9 +84,6 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
       <a class="get" id="getLink" href="#">단축어 받기</a>
       <ol class="note" style="padding-left:20px">
         <li>열리는 화면에서 <b>단축어 추가</b></li>
-        <li>단축어 앱에서 「교대알람」의 <b>⋯</b>(편집)을 열고, <b>알람 켜기/끄기 6곳</b>의 알람을 눌러 1단계에서 만든 내 알람으로 다시 고르기 (알람은 휴대폰마다 달라서 꼭 필요합니다). 위에서부터 차례로:<br>
-          <b>주간</b> 켜기 → <b>야간</b> 끄기 → <b>야간</b> 켜기 → <b>주간</b> 끄기 → <b>주간</b> 끄기 → <b>야간</b> 끄기</li>
-        <li>켜기/끄기와 나머지는 그대로 두고 <b>완료</b></li>
         <li>추가가 안 되면(아이폰 버전이 낮은 경우) 아래 <b>직접 만들기</b>로</li>
       </ol>
     </div>
@@ -105,6 +102,8 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
         <div><span class="k">파일 가져오기</span> · 파일 선택기 표시 <b>끔</b> · 파일 경로 <b>교대근무.txt</b> · 찾을 수 없으면 오류 <b>끔</b></div>
         <div><span class="k">입력에서 텍스트 가져오기</span> (입력 = 파일)</div>
         <div><span class="k">현재 날짜</span> → <span class="k">날짜 조절</span> <b>6 시간 추가</b> → <span class="k">날짜 형식 지정</span> 사용자 지정 <b>yyyyMMdd</b></div>
+        <div><span class="k">알람 찾기</span> · 레이블 <b>다음과 같음</b> <b>주간</b></div>
+        <div><span class="k">알람 찾기</span> · 레이블 <b>다음과 같음</b> <b>야간</b></div>
         <div><span class="k">만약</span> 텍스트 <b>다음을 포함함</b> [형식 지정된 날짜]<b>D</b></div>
         <div style="--d:1"><span class="k">알람 켜기/끄기</span> 주간 <b>켬</b> · <span class="k">알람 켜기/끄기</span> 야간 <b>끔</b></div>
         <div><span class="k">그렇지 않으면</span></div>
@@ -121,6 +120,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
       <ul class="note">
         <li><b>6시간</b>이 맞습니다 (1일 아님). 밤 9시에 돌면 내일, 낮에 [반영]을 누르면 아직 안 울린 오늘 알람을 맞춥니다.</li>
         <li>[형식 지정된 날짜]는 글자 칸을 누르면 위에 뜨는 변수에서 고르고, 바로 뒤에 영어 대문자 D/N/O 를 붙입니다 (D=주간, N=야간, O=휴무).</li>
+        <li>"알람 켜기/끄기"(전환)의 알람 칸은 목록의 알람을 직접 고르지 말고 <b>변수 선택</b>에서 위 <b>알람 찾기의 결과</b>를 고릅니다 (주간/야간에 맞게).</li>
         <li>"중단 및 출력" 동작이 생겼으면 지우세요 (뒤 동작이 실행되지 않음).</li>
         <li>마지막에 오른쪽 위 <b>완료</b>.</li>
       </ul>
@@ -160,7 +160,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
 </div>
 <script>
 // iCloud 공유 링크 (단축어 앱에서 「교대알람」 길게 누르기 → 공유 → iCloud 링크 복사). 비어 있으면 직접 만들기 안내
-var SHORTCUT_LINK = 'https://www.icloud.com/shortcuts/8dcee61a0e1c47d2ad93d7d1e840d2e3';
+var SHORTCUT_LINK = 'https://www.icloud.com/shortcuts/99dad16610ac4bc5a5f1696cabaac53a';
 if (/^https:\/\/www\.icloud\.com\/shortcuts\//.test(SHORTCUT_LINK)) {
   document.getElementById('getLink').href = SHORTCUT_LINK;
   document.getElementById('getBox').hidden = false;
