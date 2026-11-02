@@ -924,7 +924,11 @@ a.btn.primary { color: var(--surface); }
     var end = new Date(today.y, today.m, today.d + IOS_DAYS - 1);
     st.ios.sent = { sig: iosSig(), until: S.dateKey(end.getFullYear(), end.getMonth(), end.getDate()).replace(/-/g, ''), at: Date.now() };
     save(); renderIos();
-    location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(IOS_SHORTCUT) + '&input=text&text=' + encodeURIComponent(plan);
+    // 단축어는 클립보드에서 읽는다 (iOS 버전에 따라 '단축어 입력' 설정 메뉴가 없어서). 입력으로도 같이 넘긴다
+    var url = 'shortcuts://run-shortcut?name=' + encodeURIComponent(IOS_SHORTCUT) + '&input=text&text=' + encodeURIComponent(plan);
+    function go() { location.href = url; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(plan).then(go, go);
+    else go();
   }
   function renderIos() {
     var show = !native && !framed();
