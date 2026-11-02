@@ -84,7 +84,10 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
       <a class="get" id="getLink" href="#">단축어 받기</a>
       <ol class="note" style="padding-left:20px">
         <li>열리는 화면에서 <b>단축어 추가</b></li>
-        <li>단축어 앱에서 「교대알람」의 <b>⋯</b>(편집) → <b>알람 켜기/끄기</b> 칸이 비어 있으면 1단계 알람(주간/야간)을 골라 주기</li>
+        <li>단축어 앱에서 「교대알람」의 <b>⋯</b>(편집)을 열고, <b>알람 켜기/끄기 6곳</b>의 알람을 눌러 1단계에서 만든 내 알람으로 다시 고르기 (알람은 휴대폰마다 달라서 꼭 필요합니다). 위에서부터 차례로:<br>
+          <b>주간</b> 켜기 → <b>야간</b> 끄기 → <b>야간</b> 켜기 → <b>주간</b> 끄기 → <b>주간</b> 끄기 → <b>야간</b> 끄기</li>
+        <li>켜기/끄기와 나머지는 그대로 두고 <b>완료</b></li>
+        <li>추가가 안 되면(아이폰 버전이 낮은 경우) 아래 <b>직접 만들기</b>로</li>
       </ol>
     </div>
     <p id="noLink" class="note" style="margin:0">받기 링크가 아직 없어서 직접 만듭니다 (약 10분). 아래 <b>직접 만들기</b>를 펼치세요.</p>
@@ -157,7 +160,7 @@ summary { cursor: pointer; font-weight: 600; color: var(--accent); }
 </div>
 <script>
 // iCloud 공유 링크 (단축어 앱에서 「교대알람」 길게 누르기 → 공유 → iCloud 링크 복사). 비어 있으면 직접 만들기 안내
-var SHORTCUT_LINK = '';
+var SHORTCUT_LINK = 'https://www.icloud.com/shortcuts/8dcee61a0e1c47d2ad93d7d1e840d2e3';
 if (/^https:\/\/www\.icloud\.com\/shortcuts\//.test(SHORTCUT_LINK)) {
   document.getElementById('getLink').href = SHORTCUT_LINK;
   document.getElementById('getBox').hidden = false;
