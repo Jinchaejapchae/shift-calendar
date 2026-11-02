@@ -233,6 +233,11 @@ a.btn.primary { color: var(--surface); }
 .sheet select { width: 100%; border: 0; background: transparent; padding: 0; font-weight: 600; font-size: 15px; }
 .note { font-size: 12.5px; color: var(--sub); padding: 0 4px; line-height: 1.6; }
 .webonly { color: var(--warn); }
+/* 아이폰 시계 알람 (단축어) */
+.iosbar { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--warn); border-radius: 14px; padding: 10px 12px; font-size: 13.5px; }
+.iosbar[hidden] { display: none; }
+.iosbar span { flex: 1; }
+.iosbar .btn { flex: none; }
 @media (prefers-reduced-motion: reduce) { .sw i, .sw i::after { transition: none; } }
 </style>
 
@@ -251,6 +256,8 @@ a.btn.primary { color: var(--surface); }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M5 4 2 7M19 4l3 3"/></svg>
     </button>
   </header>
+
+  <div class="iosbar" id="iosBar" hidden role="status"><span id="iosBarTxt"></span><button type="button" class="btn primary" id="iosBarGo">시계 알람에 반영</button></div>
 
   <section class="hero" id="hero" aria-live="polite">
     <div class="k" id="hK">오늘</div>
@@ -355,6 +362,16 @@ a.btn.primary { color: var(--surface); }
     <h3 id="setTitle">알람과 설정 <button type="button" class="btn" data-close>닫기</button></h3>
 
     <div>
+      <div id="iosBox" hidden style="margin-bottom:14px">
+        <h4>아이폰 시계 알람 (단축어)</h4>
+        <div class="group">
+          <div class="item">
+            <div class="txt"><div class="nm">시계 앱 알람을 근무표대로</div><div class="ds">대근·연차까지 반영해 매일 밤 내일 알람을 켜고 끔. 처음에 단축어를 한 번 만들어야 함</div></div>
+            <label class="sw"><input type="checkbox" id="iosOn" aria-label="아이폰 시계 알람 사용"><i></i></label>
+          </div>
+          <div class="status" id="iosStatus"></div>
+        </div>
+      </div>
       <h4>알람</h4>
       <div class="group">
         <div class="item">
@@ -632,12 +649,21 @@ a.btn.primary { color: var(--surface); }
     return L.map(icsFold).join('\r\n') + '\r\n';
   }
 
+  // 아이폰 단축어용 근무표 글자: 'SHIFTCAL1 D 20261102O 20261103O 20261104N ...' (변경 반영, from 부터 days 일)
+  // 단축어는 '내일날짜+D/N/O' 가 들어 있는지만 본다. D=주간 N=야간 O=휴무. 없으면 기간이 끝난 것
+  var PLAN_CODE = { day: 'D', night: 'N', off: 'O' };
+  function alarmPlan(team, order, overrides, from, days) {
+    var y = from.getFullYear(), m = from.getMonth(), d = from.getDate(), out = ['SHIFTCAL1', team];
+    for (var i = 0; i < days; i++) out.push(dateKey(y, m, d + i).replace(/-/g, '') + PLAN_CODE[myShift(team, y, m, d + i, order, overrides)]);
+    return out.join(' ');
+  }
+
   var api = {
     PATTERN: PATTERN, LABEL: LABEL, TEAMS: TEAMS, BASE_TEAM: BASE_TEAM,
     DEFAULT_ORDER: DEFAULT_ORDER, mod: mod, dayIndex: dayIndex,
     position: position, shiftOf: shiftOf, allTeams: allTeams, allOrders: allOrders,
     DEFAULT_ALARMS: DEFAULT_ALARMS, parseTime: parseTime, runLength: runLength,
-    dateKey: dateKey, overrideOf: overrideOf, myShift: myShift, icsCalendar: icsCalendar, icsRecurring: icsRecurring, alarmEvents: alarmEvents
+    dateKey: dateKey, overrideOf: overrideOf, myShift: myShift, icsCalendar: icsCalendar, icsRecurring: icsRecurring, alarmPlan: alarmPlan, alarmEvents: alarmEvents
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Shift = api;
@@ -652,7 +678,7 @@ a.btn.primary { color: var(--surface); }
   var native = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
   var Alarm = native ? (cap.Plugins && cap.Plugins.ShiftAlarm) || (cap.registerPlugin && cap.registerPlugin('ShiftAlarm')) : null;
 
-  var st = { team: 'D', order: S.DEFAULT_ORDER.join(''), view: 'mine', alarms: JSON.parse(JSON.stringify(S.DEFAULT_ALARMS)), overrides: {} };
+  var st = { team: 'D', order: S.DEFAULT_ORDER.join(''), view: 'mine', alarms: JSON.parse(JSON.stringify(S.DEFAULT_ALARMS)), overrides: {}, ios: { on: false, sent: null } };
   // 웹에서는 알람이 울리지 않고 캘린더 내보내기 알림에만 쓰이므로 출근·전날 알림을 기본으로 켠다
   if (!native) { st.alarms.wake.on = true; st.alarms.eve.on = true; }
   try {
@@ -661,6 +687,7 @@ a.btn.primary { color: var(--surface); }
     // 조 순서는 사용자가 설정에서 직접 고른 경우만 따른다. 예전 판은 기본값(D→A→B→C, 틀렸던 순서)도 저장했으므로 무시
     if (saved.order && saved.orderSet) { st.order = saved.order; st.orderSet = true; }
     if (saved.view === 'all') st.view = 'all';
+    if (saved.ios && typeof saved.ios === 'object') st.ios = { on: !!saved.ios.on, sent: saved.ios.sent || null };
     if (saved.overrides && typeof saved.overrides === 'object') st.overrides = saved.overrides;
     if (saved.alarms) ['wake', 'eve', 'off'].forEach(function (k) { if (saved.alarms[k]) Object.assign(st.alarms[k], saved.alarms[k]); });
   } catch (e) {}
@@ -831,6 +858,7 @@ a.btn.primary { color: var(--surface); }
     $('ovrHint').textContent = (sov ? st.team + '조 원래 근무는 ' + S.LABEL[base] + '입니다. ' : '대근·연차가 생기면 근무를 바꾸세요. ') +
       (native ? '알람도 바뀐 근무대로 울립니다.' : '달력에 빨간 점으로 표시됩니다.');
     if (!$('exSheet').hidden) renderExport();
+    renderIos();
   }
 
   // ---- 내 근무 변경 ----
@@ -872,6 +900,56 @@ a.btn.primary { color: var(--surface); }
   document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { openSheet(null); }); });
   $('scrim').addEventListener('click', function () { openSheet(null); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') openSheet(null); });
+
+  // ---- 아이폰 시계 알람: 단축어 '교대알람' 에 앞으로 400일 내 근무(변경 반영)를 글자로 넘긴다 ----
+  // 단축어가 파일로 저장하고, 매일 밤 자동화가 내일 근무를 보고 시계 앱 알람 2개를 켜고 끈다 (iphone-alarm.html)
+  var IOS_SHORTCUT = '교대알람', IOS_DAYS = 400, IOS_WARN_DAYS = 30;
+  function iosSig() {
+    var o = ovs(st.team), keys = Object.keys(o).sort();
+    return st.team + '|' + st.order + '|' + keys.map(function (k) { return k + o[k].shift; }).join(',');
+  }
+  function daysLeft(until) {
+    var p = /^(\d{4})(\d\d)(\d\d)$/.exec(until || '');
+    return p ? Math.round((Date.UTC(+p[1], p[2] - 1, +p[3]) - Date.UTC(today.y, today.m, today.d)) / 86400000) : -1;
+  }
+  function iosNeed() { // 다시 보내야 하는 이유, 없으면 ''
+    var s = st.ios.sent;
+    if (!s) return '아직 시계 알람에 반영하지 않았어요.';
+    if (s.sig !== iosSig()) return '근무 변경이 아이폰 시계 알람에 아직 반영되지 않았어요.';
+    if (daysLeft(s.until) < IOS_WARN_DAYS) return '아이폰 알람용 근무표가 곧 끝나요. 한 번 더 반영해 주세요.';
+    return '';
+  }
+  function iosSend() {
+    var from = new Date(today.y, today.m, today.d), plan = S.alarmPlan(st.team, order(), ovs(st.team), from, IOS_DAYS);
+    var end = new Date(today.y, today.m, today.d + IOS_DAYS - 1);
+    st.ios.sent = { sig: iosSig(), until: S.dateKey(end.getFullYear(), end.getMonth(), end.getDate()).replace(/-/g, ''), at: Date.now() };
+    save(); renderIos();
+    location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(IOS_SHORTCUT) + '&input=text&text=' + encodeURIComponent(plan);
+  }
+  function renderIos() {
+    var show = !native && !framed();
+    $('iosBox').hidden = !show;
+    $('iosOn').checked = st.ios.on;
+    var need = show && st.ios.on ? iosNeed() : '';
+    $('iosBar').hidden = !need;
+    $('iosBarTxt').textContent = need;
+    var s = st.ios.sent, h = [];
+    if (st.ios.on) {
+      if (s) {
+        var t = new Date(s.at), until = s.until.slice(0, 4) + '. ' + (+s.until.slice(4, 6)) + '. ' + (+s.until.slice(6)) + '.';
+        h.push('<div class="nextA">마지막 반영: ' + (t.getMonth() + 1) + '/' + t.getDate() + ' ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ' · ' + until + '까지</div>');
+      }
+      if (need) h.push('<div class="warn">' + esc(need) + '</div>');
+      h.push('<div>근무를 바꾸면 위쪽에 알림 줄이 뜹니다. 누르면 단축어 앱이 잠깐 열렸다가 반영돼요. 알람 시각은 시계 앱에서 정합니다.</div>');
+      h.push('<div class="btnrow"><button type="button" class="btn primary" id="iosGo">지금 시계 알람에 반영</button><a class="btn" href="iphone-alarm.html">처음 설정 방법</a></div>');
+    } else {
+      h.push('<div>아이폰에서 시계 앱 알람(끝까지 울림)을 쓰려면 켜세요. <a href="iphone-alarm.html">처음 설정 방법 (단축어 2개, 약 10분)</a></div>');
+    }
+    $('iosStatus').innerHTML = h.join('');
+    if ($('iosGo')) $('iosGo').addEventListener('click', iosSend);
+  }
+  $('iosOn').addEventListener('change', function () { st.ios.on = $('iosOn').checked; save(); renderIos(); });
+  $('iosBarGo').addEventListener('click', iosSend);
 
   // ---- 캘린더 내보내기 (.ics): 이번 달 1일부터 5년, 내 근무 변경 반영, 알림은 설정의 시각 ----
   var EX_MONTHS = 60;
