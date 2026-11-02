@@ -387,7 +387,7 @@ a.btn.primary { color: var(--surface); }
         </div>
       </div>
       <p class="note">근무 패턴: 주 주 휴 휴 야 야 휴 휴 (8일 반복)<br>기준: 2026-10-31(토) = D조 주간 첫날
-        <span class="webonly" id="orderWarn" hidden><br>기본 순서(D → A → B → C)와 다르게 설정되어 있습니다.</span></p>
+        <span class="webonly" id="orderWarn" hidden><br>기본 순서(D → A → C → B)와 다르게 설정되어 있습니다.</span></p>
     </div>
   </div>
 </section>
@@ -407,8 +407,9 @@ a.btn.primary { color: var(--surface); }
   var BASE_TEAM = 'D';
   var DAY_MS = 86400000;
 
-  // 주간에 들어오는 순서 (기준 조부터, 2일씩). 2026-10-31 사용자 확인: D -> A -> B -> C -> D ...
-  var DEFAULT_ORDER = ['D', 'A', 'B', 'C'];
+  // 주간에 들어오는 순서 (기준 조부터, 2일씩). 2026-11-02 사용자 정정: D -> A -> C -> B -> D ...
+  // (D·C, A·B 가 짝: 같은 날 한 조는 주간, 한 조는 야간, 휴무도 같은 날. 처음 확인한 D->A->B->C 는 틀렸음)
+  var DEFAULT_ORDER = ['D', 'A', 'C', 'B'];
 
   function mod(n, m) { return ((n % m) + m) % m; }
 
@@ -656,7 +657,8 @@ a.btn.primary { color: var(--surface); }
   try {
     var saved = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (saved.team) st.team = saved.team;
-    if (saved.order) st.order = saved.order;
+    // 조 순서는 사용자가 설정에서 직접 고른 경우만 따른다. 예전 판은 기본값(D→A→B→C, 틀렸던 순서)도 저장했으므로 무시
+    if (saved.order && saved.orderSet) { st.order = saved.order; st.orderSet = true; }
     if (saved.view === 'all') st.view = 'all';
     if (saved.overrides && typeof saved.overrides === 'object') st.overrides = saved.overrides;
     if (saved.alarms) ['wake', 'eve', 'off'].forEach(function (k) { if (saved.alarms[k]) Object.assign(st.alarms[k], saved.alarms[k]); });
@@ -702,7 +704,7 @@ a.btn.primary { color: var(--surface); }
   });
   if (!S.allOrders().some(function (o) { return o.join('') === st.order; })) st.order = S.DEFAULT_ORDER.join('');
   orderSel.value = st.order;
-  orderSel.addEventListener('change', function () { st.order = orderSel.value; save(); render(); syncAlarms(); });
+  orderSel.addEventListener('change', function () { st.order = orderSel.value; st.orderSet = true; save(); render(); syncAlarms(); });
 
   document.querySelectorAll('[data-team]').forEach(function (b) {
     b.addEventListener('click', function () { st.team = b.dataset.team; save(); render(); syncAlarms(); });
