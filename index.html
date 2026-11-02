@@ -650,7 +650,7 @@ a.btn.primary { color: var(--surface); }
   }
 
   // 아이폰 단축어용 근무표 글자: 'SHIFTCAL1 D 20261102O 20261103O 20261104N ...' (변경 반영, from 부터 days 일)
-  // 단축어는 '내일날짜+D/N/O' 가 들어 있는지만 본다. D=주간 N=야간 O=휴무. 없으면 기간이 끝난 것
+  // 단축어는 '(지금+6시간)의 날짜+D/N/O' 가 들어 있는지만 본다. D=주간 N=야간 O=휴무. 없으면 기간이 끝난 것
   var PLAN_CODE = { day: 'D', night: 'N', off: 'O' };
   // times = { day, night } 를 주면 머리에 DAY=05:30 NIGHT=17:30 (시계 알람 시각을 바꿀 때만)
   function alarmPlan(team, order, overrides, from, days, times) {
