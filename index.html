@@ -372,10 +372,10 @@ a.btn.primary { color: var(--surface); }
           <div class="status" id="iosStatus"></div>
         </div>
       </div>
-      <h4>알람</h4>
+      <h4 id="alarmHead">알람</h4>
       <div class="group">
         <div class="item">
-          <div class="txt"><div class="nm">출근 기상 알람</div><div class="ds">근무일마다 끌 때까지 울림. 휴무일은 안 울림</div></div>
+          <div class="txt"><div class="nm">출근 기상 알람</div><div class="ds" id="wakeDs">근무일마다 끌 때까지 울림. 휴무일은 안 울림</div></div>
           <label class="sw"><input type="checkbox" id="aWake" aria-label="출근 기상 알람"><i></i></label>
         </div>
         <div class="times">
@@ -904,6 +904,7 @@ a.btn.primary { color: var(--surface); }
   // ---- 아이폰 시계 알람: 단축어 '교대알람' 에 앞으로 400일 내 근무(변경 반영)를 글자로 넘긴다 ----
   // 단축어가 파일로 저장하고, 매일 밤 자동화가 내일 근무를 보고 시계 앱 알람 2개를 켜고 끈다 (iphone-alarm.html)
   var IOS_SHORTCUT = '교대알람', IOS_DAYS = 400, IOS_WARN_DAYS = 30;
+  function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
   function iosSig() {
     var o = ovs(st.team), keys = Object.keys(o).sort();
     return st.team + '|' + st.order + '|' + keys.map(function (k) { return k + o[k].shift; }).join(',');
@@ -933,7 +934,7 @@ a.btn.primary { color: var(--surface); }
     else go();
   }
   function renderIos() {
-    var show = !native && !framed();
+    var show = !native && !framed() && isIOS();
     $('iosBox').hidden = !show;
     $('iosOn').checked = st.ios.on;
     var need = show && st.ios.on ? iosNeed() : '';
@@ -1054,6 +1055,10 @@ a.btn.primary { color: var(--surface); }
     Alarm.getStatus().then(function (r) { lastStatus = r; showStatus(); }, function () {});
   }
   function showStatus() {
+    if (!native) { // 웹에서는 울리지 않고 캘린더 파일 알림에만 쓰인다
+      $('alarmHead').textContent = '캘린더 파일 알림';
+      $('wakeDs').textContent = '내보낸 캘린더 파일에 넣을 출근 알림 (한 번 울림)';
+    }
     var box = $('aStatus');
     if (!native) {
       box.innerHTML = '<span class="webonly">웹에서는 알람이 울리지 않습니다.</span> 여기 시각은 <b>캘린더로 내보내기</b> 파일의 알림(아이폰·애플워치)에 쓰입니다. 안드로이드는 앱을 설치하면 알람이 울립니다.';
