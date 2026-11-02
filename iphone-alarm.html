@@ -7,7 +7,8 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="theme-color" content="#121A45">
 <style>
-/* 아이폰 단축어 안내: 달력 앱이 단축어 「교대알람」에 근무표를 넘기고(shortcuts://run-shortcut), 매일 밤 「교대알람맞추기」가 내일 근무로 시계 알람 2개를 켜고 끈다 */
+/* 아이폰 단축어 안내: 단축어 「교대알람」 하나. 달력 앱이 근무표를 클립보드에 넣고 실행하면 저장, 매일 밤 자동화가 실행하면 내일 근무로 시계 알람 2개를 켜고 끈다.
+   SHORTCUT_LINK 에 iCloud 공유 링크를 넣으면 [단축어 받기] 버튼이 보이고 직접 만들기는 접힌다 */
 :root {
   --bg: #eef1f5; --surface: #ffffff; --ink: #0f172a; --sub: #5b6474; --hair: #e1e5ec;
   --day: #eba12a; --day-ink: #3d2800; --night: #3446a8; --night-ink: #ffffff; --accent: #3446a8; --warn: #c2410c;
@@ -45,13 +46,17 @@ b { font-weight: 700; }
 .how { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14.5px; }
 .how dt { font-weight: 700; }
 .how dd { margin: 0; color: var(--sub); }
+.get { display: flex; align-items: center; justify-content: center; gap: 8px; height: 50px; border-radius: 14px; background: var(--ink); color: var(--surface); font-weight: 700; font-size: 16px; text-decoration: none; }
+details { border-top: 1px solid var(--hair); margin-top: 12px; padding-top: 10px; }
+summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.steps-big > li { margin-top: 10px; }
 </style>
 
 <div class="wrap">
   <a class="back" href="./">‹ 달력으로</a>
   <div>
     <h1>아이폰 시계 알람을<br>근무표대로 울리게</h1>
-    <p class="lead">달력 앱에서 내 조와 대근·연차를 정하면, 아이폰이 매일 밤 내일 근무를 보고 시계 앱 알람을 켜고 끕니다. 처음에 한 번만 만들면 됩니다 (약 15분).</p>
+    <p class="lead">달력 앱에서 정한 조·대근·연차대로 아이폰 시계 앱 알람이 켜지고 꺼집니다. 처음에 한 번만 설정하면 됩니다.</p>
   </div>
 
   <div class="card">
@@ -60,102 +65,104 @@ b { font-weight: 700; }
       <dt>내일 <span class="chip night">야간</span></dt><dd>야간 알람 켬, 주간 알람 끔</dd>
       <dt>내일 휴무</dt><dd>둘 다 끔</dd>
     </dl>
-    <p class="note">끝까지 울리는 진짜 시계 알람이라 무음 모드에서도 울리고, 애플워치를 차고 있으면 워치도 울립니다.</p>
-    <div class="flow">
-      <div><b>달력 앱</b>에서 근무 변경 → 위에 뜨는 <span class="ui">시계 알람에 반영</span></div>
-      <div style="--d:1">→ 단축어 <b>교대알람</b>이 앞으로 400일 근무표를 아이폰에 저장</div>
-      <div><b>매일 밤 9시</b> 자동화 → 단축어 <b>교대알람맞추기</b>가 내일 근무를 보고 알람 켜고 끔</div>
-    </div>
+    <p class="note">끝까지 울리는 진짜 시계 알람이라 무음 모드에서도 울리고, 애플워치도 같이 울립니다. 매일 밤 9시에 내일 것을 맞춥니다.</p>
   </div>
 
   <div class="card">
-    <h2><span class="n">1</span>시계 앱에 알람 2개 만들기</h2>
+    <h2><span class="n">1</span>시계 앱에 알람 2개</h2>
     <ol>
       <li><b>시계</b> 앱 → <span class="ui">알람</span> → <span class="ui">+</span></li>
       <li>05:30 · 레이블 <b>주간</b> · 반복 <b>안 함</b> → 저장</li>
       <li>17:30 · 레이블 <b>야간</b> · 반복 <b>안 함</b> → 저장</li>
     </ol>
-    <p class="note">시각·소리는 원하는 대로 (알람 시각은 시계 앱에서 정합니다).</p>
+    <p class="note">시각·소리는 원하는 대로. 이름(레이블)만 주간/야간으로.</p>
   </div>
 
   <div class="card">
-    <h2><span class="n">2</span>단축어 「교대알람맞추기」 만들기</h2>
-    <ol>
-      <li><b>단축어</b> 앱 → <span class="ui">단축어</span> 탭 → <span class="ui">+</span> → 위쪽 이름을 <b>교대알람맞추기</b> 로</li>
-      <li>아래 동작들을 검색해서 순서대로 추가</li>
-    </ol>
-    <div class="flow">
-      <div><span class="k">파일 가져오기</span> · 파일 선택기 표시 <b>끔</b> · 파일 경로 <b>교대근무.txt</b> · 찾을 수 없으면 오류 <b>끔</b></div>
-      <div><span class="k">입력에서 텍스트 가져오기</span> (입력 = 파일)</div>
-      <div><span class="k">현재 날짜</span></div>
-      <div><span class="k">날짜 조절</span> · <b>1 일 추가</b></div>
-      <div><span class="k">날짜 형식 지정</span> · 날짜 형식 <b>사용자 지정</b> · <b>yyyyMMdd</b></div>
-      <div><span class="k">만약</span> 텍스트 <b>다음을 포함함</b> [형식 지정된 날짜]<b>D</b></div>
-      <div style="--d:1"><span class="k">알람 켜기/끄기</span> → <b>주간</b> 켬 &nbsp; <span class="k">알람 켜기/끄기</span> → <b>야간</b> 끔</div>
-      <div><span class="k">그렇지 않으면</span></div>
-      <div style="--d:1"><span class="k">만약</span> 텍스트 <b>다음을 포함함</b> [형식 지정된 날짜]<b>N</b></div>
-      <div style="--d:2"><span class="k">알람 켜기/끄기</span> → <b>야간</b> 켬 &nbsp; <span class="k">알람 켜기/끄기</span> → <b>주간</b> 끔</div>
-      <div style="--d:1"><span class="k">그렇지 않으면</span></div>
-      <div style="--d:2"><span class="k">알람 켜기/끄기</span> → <b>주간</b> 끔 &nbsp; <span class="k">알람 켜기/끄기</span> → <b>야간</b> 끔</div>
-      <div style="--d:2"><span class="k">만약</span> 텍스트 <b>다음을 포함하지 않음</b> [형식 지정된 날짜]<b>O</b></div>
-      <div style="--d:3"><span class="k">알림 보기</span> "근무표가 끝났어요. 달력 앱에서 [시계 알람에 반영]을 눌러 주세요"</div>
-      <div style="--d:2"><span class="k">만약 종료</span></div>
-      <div style="--d:1"><span class="k">만약 종료</span></div>
-      <div><span class="k">만약 종료</span></div>
+    <h2><span class="n">2</span>단축어 「교대알람」 받기</h2>
+    <div id="getBox" hidden>
+      <a class="get" id="getLink" href="#">단축어 받기</a>
+      <ol class="note" style="padding-left:20px">
+        <li>열리는 화면에서 <b>단축어 추가</b></li>
+        <li>단축어 앱에서 「교대알람」의 <b>⋯</b>(편집) → <b>알람 켜기/끄기</b> 칸이 비어 있으면 1단계 알람(주간/야간)을 골라 주기</li>
+      </ol>
     </div>
-    <ul class="note">
-      <li>[형식 지정된 날짜]는 글자 칸을 누르면 위에 뜨는 변수에서 고르고, 바로 뒤에 영어 대문자 <b>D</b>/<b>N</b>/<b>O</b>를 붙여 씁니다 (D=주간, N=야간, O=휴무).</li>
-      <li>"알람 켜기/끄기"의 <b>알람</b>을 눌러 1단계 알람을 고르고, <b>켜기</b>/<b>끄기</b>를 눌러 바꿉니다.</li>
-    </ul>
+    <p id="noLink" class="note" style="margin:0">받기 링크가 아직 없어서 직접 만듭니다 (약 10분). 아래 <b>직접 만들기</b>를 펼치세요.</p>
+    <details id="manual">
+      <summary>직접 만들기</summary>
+      <ol class="note" style="padding-left:20px">
+        <li><b>단축어</b> 앱 → <span class="ui">+</span> → 이름을 정확히 <b>교대알람</b></li>
+        <li>아래 <b>동작 검색</b>으로 순서대로 추가</li>
+      </ol>
+      <div class="flow">
+        <div><span class="k">클립보드 가져오기</span></div>
+        <div><span class="k">만약</span> 클립보드 <b>다음을 포함함</b> <b>SHIFTCAL1</b></div>
+        <div style="--d:1"><span class="k">파일 저장</span> · 클립보드 · 저장할 위치 묻기 <b>끔</b> · 하위 경로 <b>교대근무.txt</b> · 덮어쓰기 <b>켬</b></div>
+        <div><span class="k">만약 종료</span></div>
+        <div><span class="k">파일 가져오기</span> · 파일 선택기 표시 <b>끔</b> · 파일 경로 <b>교대근무.txt</b> · 찾을 수 없으면 오류 <b>끔</b></div>
+        <div><span class="k">입력에서 텍스트 가져오기</span> (입력 = 파일)</div>
+        <div><span class="k">현재 날짜</span> → <span class="k">날짜 조절</span> <b>1 일 추가</b> → <span class="k">날짜 형식 지정</span> 사용자 지정 <b>yyyyMMdd</b></div>
+        <div><span class="k">만약</span> 텍스트 <b>다음을 포함함</b> [형식 지정된 날짜]<b>D</b></div>
+        <div style="--d:1"><span class="k">알람 켜기/끄기</span> 주간 <b>켬</b> · <span class="k">알람 켜기/끄기</span> 야간 <b>끔</b></div>
+        <div><span class="k">그렇지 않으면</span></div>
+        <div style="--d:1"><span class="k">만약</span> 텍스트 <b>다음을 포함함</b> [형식 지정된 날짜]<b>N</b></div>
+        <div style="--d:2"><span class="k">알람 켜기/끄기</span> 야간 <b>켬</b> · <span class="k">알람 켜기/끄기</span> 주간 <b>끔</b></div>
+        <div style="--d:1"><span class="k">그렇지 않으면</span></div>
+        <div style="--d:2"><span class="k">알람 켜기/끄기</span> 주간 <b>끔</b> · <span class="k">알람 켜기/끄기</span> 야간 <b>끔</b></div>
+        <div style="--d:2"><span class="k">만약</span> 텍스트 <b>다음을 포함하지 않음</b> [형식 지정된 날짜]<b>O</b></div>
+        <div style="--d:3"><span class="k">알림 보기</span> "근무표가 끝났어요. 달력 앱에서 [시계 알람에 반영]을 눌러 주세요"</div>
+        <div style="--d:2"><span class="k">만약 종료</span></div>
+        <div style="--d:1"><span class="k">만약 종료</span></div>
+        <div><span class="k">만약 종료</span></div>
+      </div>
+      <ul class="note">
+        <li>[형식 지정된 날짜]는 글자 칸을 누르면 위에 뜨는 변수에서 고르고, 바로 뒤에 영어 대문자 D/N/O 를 붙입니다 (D=주간, N=야간, O=휴무).</li>
+        <li>"중단 및 출력" 동작이 생겼으면 지우세요 (뒤 동작이 실행되지 않음).</li>
+        <li>마지막에 오른쪽 위 <b>완료</b>.</li>
+      </ul>
+    </details>
   </div>
 
   <div class="card">
-    <h2><span class="n">3</span>단축어 「교대알람」 만들기</h2>
-    <p class="note" style="margin:0 0 8px">달력 앱이 이 이름으로 근무표를 보냅니다. 이름을 <b>정확히</b> 교대알람 으로.</p>
-    <div class="flow">
-      <div><span class="k">클립보드 가져오기</span></div>
-      <div><span class="k">파일 저장</span> · 저장할 것 = <b>클립보드</b> · 저장할 위치 묻기 <b>끔</b> · 하위 경로 <b>교대근무.txt</b> · 덮어쓰기 <b>켬</b></div>
-      <div><span class="k">단축어 실행</span> → <b>교대알람맞추기</b></div>
-      <div><span class="k">알림 보기</span> "시계 알람에 반영했어요"</div>
-    </div>
-    <ul class="note">
-      <li>달력 앱이 근무표를 <b>클립보드에 복사</b>한 뒤 이 단축어를 엽니다. 그래서 첫 동작이 「클립보드 가져오기」입니다.</li>
-      <li>「파일 저장」의 파란 글자를 눌러 <b>클립보드</b>를 고르고, 오른쪽 <b>›</b> 를 눌러 나머지 항목을 맞춥니다.</li>
-      <li>처음 실행 때 "붙여넣기 허용", "파일 접근 허용"을 물으면 <b>항상 허용</b>.</li>
-      <li>저장 위치는 iCloud Drive의 <b>Shortcuts</b> 폴더입니다. 2단계의 「파일 가져오기」도 같은 곳을 봅니다.</li>
-      <li>편집 화면에서 ▶로 직접 실행하면 클립보드에 근무표가 없어서 맞지 않습니다. 시험은 달력 앱의 <b>지금 시계 알람에 반영</b>으로.</li>
-    </ul>
-  </div>
-
-  <div class="card">
-    <h2><span class="n">4</span>매일 밤 자동화</h2>
+    <h2><span class="n">3</span>매일 밤 자동화</h2>
     <ol>
-      <li>단축어 앱 → <span class="ui">자동화</span> 탭 → <span class="ui">+</span> → <span class="ui">특정 시간</span></li>
-      <li>시간 <b>오후 9:00</b>, <b>매일</b> → <span class="ui">즉시 실행</span> → <span class="ui">다음</span></li>
-      <li><span class="ui">단축어 실행</span>(또는 내 단축어 목록에서) → <b>교대알람맞추기</b> 고르기</li>
+      <li>단축어 앱 → 아래 <span class="ui">자동화</span> 탭 → <span class="ui">+</span> → <span class="ui">특정 시간</span></li>
+      <li><b>오후 9:00</b> · <b>매일</b> · <span class="ui">즉시 실행</span> → <span class="ui">다음</span></li>
+      <li>목록에서 <b>교대알람</b> 고르기</li>
     </ol>
+    <p class="note">애플이 막아 두어서 자동화만은 각자 만들어야 합니다 (터치 5번).</p>
   </div>
 
   <div class="card">
-    <h2><span class="n">5</span>달력 앱에서 켜기</h2>
+    <h2><span class="n">4</span>달력 앱에서 켜기</h2>
     <ol>
-      <li>홈 화면의 <b>교대근무</b> 앱(달력)에서 내 조 선택</li>
-      <li>오른쪽 위 <b>시계 아이콘</b> → <b>아이폰 시계 알람 (단축어)</b> 켜기 → <span class="ui">지금 시계 알람에 반영</span></li>
-      <li>단축어 앱이 열리며 실행됩니다. 처음엔 "파일 접근", "알람 변경" 허용을 물으면 <b>항상 허용</b></li>
+      <li>홈 화면 <b>교대근무</b> 앱 → 내 조 선택 → 오른쪽 위 <b>시계 아이콘</b></li>
+      <li><b>아이폰 시계 알람 (단축어)</b> 스위치 켜기 → 단축어 앱이 열리며 바로 반영</li>
+      <li>처음엔 "붙여넣기", "파일 접근", "알람 변경" 허용을 물으면 모두 <b>항상 허용</b></li>
       <li>시계 앱에서 내일 근무에 맞는 알람만 켜졌는지 확인</li>
     </ol>
-    <p class="note">이후 대근·연차를 바꾸면 달력 앱 위쪽에 <b>"아이폰 시계 알람에 아직 반영되지 않았어요"</b> 줄이 뜹니다. <span class="ui">시계 알람에 반영</span>만 누르면 됩니다. 근무표는 400일치라 1년쯤 지나면 같은 줄이 다시 뜹니다.</p>
   </div>
 
   <div class="card">
-    <h2><span class="n">!</span>알아 둘 것</h2>
+    <h2><span class="n">✓</span>평소에는</h2>
     <ul>
-      <li><b>잠시 쉬고 싶을 때</b>: 달력 앱 설정에서 <b>아이폰 시계 알람</b> 스위치를 끄면 단축어가 열리며 알람 2개를 끄고, 밤 9시 자동화도 계속 꺼 둡니다. 다시 켜면 근무표대로 돌아옵니다.</li>
-      <li>알람은 <b>내일</b> 것만 맞춥니다. <b>오늘</b> 근무를 바꿨다면 오늘 알람은 시계 앱에서 직접 켜고 끄세요.</li>
-      <li>밤 9시 이후에 근무를 바꿨다면 반영만 누르면 내일 알람이 바로 맞춰집니다.</li>
-      <li>아이폰이 꺼져 있던 밤에는 자동화가 실행되지 않습니다.</li>
-      <li class="warn">캘린더 구독도 해 두었다면 짧은 캘린더 알림이 같이 울립니다. 싫으면 설정 → 캘린더 → 계정 → 구독한 캘린더 → <b>알림 제거</b>.</li>
+      <li>그냥 두면 됩니다. 매일 밤 9시에 내일 알람이 맞춰집니다.</li>
+      <li>대근·연차를 바꾸면 달력 앱 위에 알림 줄이 뜹니다 → <span class="ui">시계 알람에 반영</span> 한 번.</li>
+      <li>잠시 쉬려면 같은 스위치를 <b>끄기</b>. 알람이 꺼지고 밤에도 꺼진 채로 있습니다. 다시 켜면 근무표대로.</li>
+      <li>오늘 근무를 바꾼 경우 오늘 알람은 시계 앱에서 직접 (단축어는 내일 것을 맞춤).</li>
+      <li class="warn">캘린더 구독도 해 두었다면 짧은 캘린더 알림이 같이 옵니다. 싫으면 설정 → 캘린더 → 계정 → 구독한 캘린더 → <b>알림 제거</b>.</li>
     </ul>
   </div>
 </div>
+<script>
+// iCloud 공유 링크 (단축어 앱에서 「교대알람」 길게 누르기 → 공유 → iCloud 링크 복사). 비어 있으면 직접 만들기 안내
+var SHORTCUT_LINK = '';
+if (/^https:\/\/www\.icloud\.com\/shortcuts\//.test(SHORTCUT_LINK)) {
+  document.getElementById('getLink').href = SHORTCUT_LINK;
+  document.getElementById('getBox').hidden = false;
+  document.getElementById('noLink').hidden = true;
+} else {
+  document.getElementById('manual').open = true;
+}
+</script>
 </html>

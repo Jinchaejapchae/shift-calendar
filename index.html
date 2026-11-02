@@ -949,7 +949,7 @@ a.btn.primary { color: var(--surface); }
       h.push('<div>근무를 바꾸면 위쪽에 알림 줄이 뜹니다. 누르면 단축어 앱이 잠깐 열렸다가 반영돼요. 알람 시각은 시계 앱에서 정합니다.</div>');
       h.push('<div class="btnrow"><button type="button" class="btn primary" id="iosGo">지금 시계 알람에 반영</button><a class="btn" href="iphone-alarm.html">처음 설정 방법</a></div>');
     } else {
-      h.push('<div>' + (s && s.sig === 'OFF' ? '꺼짐: 시계 알람 2개를 껐고, 밤 9시 자동화도 계속 꺼 둡니다. 다시 켜면 근무표대로 돌아옵니다. ' : '아이폰에서 시계 앱 알람(끝까지 울림)을 쓰려면 켜세요. ') + '<a href="iphone-alarm.html">처음 설정 방법 (단축어 2개, 약 15분)</a></div>');
+      h.push('<div>' + (s && s.sig === 'OFF' ? '꺼짐: 시계 알람 2개를 껐고, 밤 9시 자동화도 계속 꺼 둡니다. 다시 켜면 근무표대로 돌아옵니다. ' : '아이폰에서 시계 앱 알람(끝까지 울림)을 쓰려면 켜세요. ') + '<a href="iphone-alarm.html">처음 설정 방법 (단축어 1개 + 자동화)</a></div>');
     }
     $('iosStatus').innerHTML = h.join('');
     if ($('iosGo')) $('iosGo').addEventListener('click', iosSend);
