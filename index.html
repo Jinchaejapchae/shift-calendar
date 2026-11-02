@@ -1002,6 +1002,11 @@ a.btn.primary { color: var(--surface); }
     syncAlarms();
   });
 
+  // 공개 웹 주소에서만: 오프라인으로도 열리게 (sw.js 는 make-site.js 가 만듦)
+  if ('serviceWorker' in navigator && !native && !framed() && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+
   render();
   showStatus();
   syncAlarms();
