@@ -239,7 +239,7 @@ a.btn.primary { color: var(--surface); }
 .linksteps { margin: 6px 0 0; padding-left: 20px; color: var(--sub); line-height: 1.6; }
 .linksteps .btn { display: inline-block; margin: 2px 0 0 4px; }
 .linksteps .btn[hidden] { display: none; }
-.linkbtns { padding: 0 16px 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+.linkbtns { padding: 0 16px 14px; }
 .note { font-size: 12.5px; color: var(--sub); padding: 0 4px; line-height: 1.6; }
 .webonly { color: var(--warn); }
 /* 아이폰 시계 알람 (단축어) */
@@ -406,29 +406,32 @@ a.btn.primary { color: var(--surface); }
     </div>
 
     <div id="linkBox" hidden>
-      <h4>설비 알람 받기</h4>
+      <h4>설비 알람 채널</h4>
       <div class="group">
         <div id="linkOff">
-          <div class="item"><div class="txt"><div class="nm">내가 근무인 날만 설비 알람 받기</div><div class="ds">대근·연차를 바꾸면 알림도 같이 바뀜. 설비 담당자에게 받은 앱 연결 링크를 넣으세요</div></div></div>
+          <div class="item"><div class="txt"><div class="nm">내 조의 ntfy 채널 이름 보기</div><div class="ds">설비 담당자에게 받은 앱 연결 링크를 넣으세요</div></div></div>
           <div class="linkform">
             <label for="linkIn">앱 연결 링크</label><input id="linkIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="여기에 붙여넣기">
-            <label for="linkName">내 이름</label><input id="linkName" maxlength="20" autocomplete="off" placeholder="목록에 보일 이름">
-            <button type="button" class="btn primary" id="linkGo">연결</button>
+            <button type="button" class="btn primary" id="linkGo">넣기</button>
             <div class="warn" id="linkErr" hidden></div>
           </div>
         </div>
         <div id="linkOn" hidden>
           <div class="linkform">
-            <label for="linkTopic">내 알림 채널</label>
+            <label for="linkTopic" id="linkLabel">내 조 채널</label>
             <div class="linkcopy"><input id="linkTopic" readonly><button type="button" class="btn" id="linkCopy">복사</button></div>
+            <div id="linkDayBox" hidden>
+              <label for="linkDay">주간근무 채널</label>
+              <div class="linkcopy"><input id="linkDay" readonly><button type="button" class="btn" id="linkDayCopy">복사</button></div>
+            </div>
             <ol class="linksteps">
               <li>ntfy 앱에서 + 를 누르고 이 채널 이름을 넣어 구독 <a class="btn" id="linkOpen" hidden>ntfy 앱에서 열기</a></li>
-              <li>아래 [시험 알림]으로 폰에 오는지 확인</li>
-              <li>예전에 구독한 조 채널·전체 채널은 구독 해제 (그대로 두면 쉬는 날에도 옴)</li>
+              <li>내 조가 근무 중일 때만 알림이 옵니다</li>
+              <li>예전에 구독한 전체 채널은 구독 해제 (그대로 두면 쉬는 날에도 옴)</li>
             </ol>
+            <div class="warn" id="linkHint" hidden>홈 화면에 추가한 앱을 쓰신다면, 받은 링크를 그 앱 설정의 이 칸에도 넣어 주세요.</div>
           </div>
-          <div class="status" id="linkStatus"></div>
-          <div class="btnrow linkbtns"><button type="button" class="btn" id="linkTest">시험 알림</button><button type="button" class="btn" id="linkSend">다시 보내기</button><button type="button" class="btn" id="linkOffBtn">연결 해제</button></div>
+          <div class="linkbtns"><button type="button" class="btn" id="linkReset">다른 링크 넣기</button></div>
         </div>
       </div>
     </div>
@@ -707,29 +710,22 @@ a.btn.primary { color: var(--surface); }
     return { version: 1, pattern: PATTERN.map(function (p) { return word[p]; }).join(''), anchors: anchors };
   }
 
-  // 설비 알람 프로그램 연결: 앱 연결 링크(또는 코드)에서 등록 채널·서버를 읽는다. 아니면 null
-  function parseJoin(text) {
-    var t = String(text || '').trim();
-    var m = /(?:^|[#&?]alarm=)(reg-[a-f0-9]{16,40})(?=$|&|\s)/.exec(t);
+  // 설비 알람 채널: 프로그램의 앱 연결 링크(#ch=A.이름~B.이름~C.이름~D.이름~day.이름)를 읽는다. 아니면 null
+  function parseChannels(text) {
+    var m = /[#&?]ch=([A-Za-z0-9_.~-]+)/.exec(String(text || '').trim());
     if (!m) return null;
-    var s = /[#&?]s=([^&\s]+)/.exec(t), server = 'https://ntfy.sh';
+    var out = {};
+    m[1].split('~').forEach(function (p) {
+      var i = p.indexOf('.'), k = p.slice(0, i), v = p.slice(i + 1);
+      if (i > 0 && /^[A-Za-z0-9_-]{1,64}$/.test(v) && (TEAMS.indexOf(k) >= 0 || k === 'day')) out[k] = v;
+    });
+    if (!TEAMS.every(function (t) { return out[t]; })) return null;
+    var s = /[#&?]s=([^&\s]+)/.exec(String(text)), server = 'https://ntfy.sh';
     if (s) {
       try { server = decodeURIComponent(s[1]).replace(/\/+$/, ''); } catch (e) { return null; }
       if (!/^https:\/\/[^\s/]+$/.test(server)) return null;
     }
-    return { reg: m[1], server: server };
-  }
-
-  // 등록 메시지: 내 채널, 조, 이름, 어제 이후의 근무 변경 (야간이 자정을 넘으므로 어제부터)
-  function regMessage(topic, team, name, overrides, from) {
-    var start = dateKey(from.getFullYear(), from.getMonth(), from.getDate() - 1);
-    var out = [], keys = Object.keys(overrides || {}).sort();
-    keys.forEach(function (k) {
-      var o = overrides[k];
-      if (k >= start && o && PLAN_CODE[o.shift] && out.length < 400) out.push(k.replace(/-/g, '') + PLAN_CODE[o.shift]);
-    });
-    var nm = encodeURIComponent(String(name || '').trim().slice(0, 20));
-    return ['SHIFTREG1', topic, team, nm || '-'].concat(out).join(' ');
+    return { server: server, topics: out };
   }
 
   var api = {
@@ -737,7 +733,7 @@ a.btn.primary { color: var(--surface); }
     DEFAULT_ORDER: DEFAULT_ORDER, mod: mod, dayIndex: dayIndex,
     position: position, shiftOf: shiftOf, allTeams: allTeams, allOrders: allOrders,
     DEFAULT_ALARMS: DEFAULT_ALARMS, parseTime: parseTime, runLength: runLength,
-    dateKey: dateKey, overrideOf: overrideOf, myShift: myShift, icsCalendar: icsCalendar, icsRecurring: icsRecurring, alarmPlan: alarmPlan, alarmEvents: alarmEvents, dutySchedule: dutySchedule, parseJoin: parseJoin, regMessage: regMessage
+    dateKey: dateKey, overrideOf: overrideOf, myShift: myShift, icsCalendar: icsCalendar, icsRecurring: icsRecurring, alarmPlan: alarmPlan, alarmEvents: alarmEvents, dutySchedule: dutySchedule, parseChannels: parseChannels
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Shift = api;
@@ -763,7 +759,7 @@ a.btn.primary { color: var(--surface); }
     if (saved.view === 'all') st.view = 'all';
     if (saved.ios && typeof saved.ios === 'object') st.ios = { on: !!saved.ios.on, sent: saved.ios.sent || null, times: saved.ios.times || null };
     if (saved.overrides && typeof saved.overrides === 'object') st.overrides = saved.overrides;
-    if (saved.link && typeof saved.link === 'object') st.link = saved.link;
+    if (saved.channels && typeof saved.channels === 'object') st.channels = saved.channels;
     if (saved.alarms) ['wake', 'eve', 'off'].forEach(function (k) { if (saved.alarms[k]) Object.assign(st.alarms[k], saved.alarms[k]); });
   } catch (e) {}
   if (!st.ios.times) st.ios.times = { day: st.alarms.wake.day, night: st.alarms.wake.night }; // 시각 변경 비교 기준
@@ -811,7 +807,7 @@ a.btn.primary { color: var(--surface); }
   orderSel.addEventListener('change', function () { st.order = orderSel.value; st.orderSet = true; save(); render(); syncAlarms(); });
 
   document.querySelectorAll('[data-team]').forEach(function (b) {
-    b.addEventListener('click', function () { st.team = b.dataset.team; save(); render(); syncAlarms(); linkSync(); });
+    b.addEventListener('click', function () { st.team = b.dataset.team; save(); render(); syncAlarms(); renderLink(); });
   });
   $('prev').addEventListener('click', function () { move(-1); });
   $('next').addEventListener('click', function () { move(1); });
@@ -943,7 +939,7 @@ a.btn.primary { color: var(--surface); }
     var base = S.shiftOf(st.team, sel.y, sel.m, sel.d, order());
     if (!shift || shift === base) delete map[key]; // 원래 근무로 고르면 변경 취소
     else map[key] = { shift: shift, memo: memo || '' };
-    save(); render(); syncAlarms(); linkSync();
+    save(); render(); syncAlarms();
   }
   document.querySelectorAll('[data-ov]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -1042,103 +1038,46 @@ a.btn.primary { color: var(--surface); }
   $('iosOn').addEventListener('change', function () { st.ios.on = $('iosOn').checked; save(); iosSend(!st.ios.on); });
   $('iosBarGo').addEventListener('click', iosSend);
 
-  // ---- 설비 알람 프로그램 연결: 내 채널 + 조 + 근무 변경을 등록 채널로 보낸다 (프로그램이 내가 근무일 때만 내 채널로 알림) ----
-  var LINK_RESEND_MS = 24 * 3600 * 1000, linkBusy = false;
-  function linkMsg() { return S.regMessage(st.link.topic, st.team, st.link.name, ovs(st.team), new Date(today.y, today.m, today.d)); }
-  function newTopic() {
-    var abc = 'abcdefghijkmnpqrstuvwxyz23456789', b = new Uint8Array(20), s = 'me-';
-    crypto.getRandomValues(b);
-    for (var i = 0; i < b.length; i++) s += abc[b[i] % abc.length];
-    return s;
-  }
-  function linkPost(topicPath, body) {
-    return fetch(st.link.server + topicPath, { method: 'POST', body: body }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); });
-  }
-  // 내용이 바뀌었거나 하루가 지났을 때만 보낸다. 못 보내면 다음에 앱을 열 때·인터넷이 돌아올 때 다시
-  function linkSync(force) {
-    if (!st.link || linkBusy) return;
-    var msg = linkMsg(), changed = msg !== st.link.sig;
-    if (!force && !changed && Date.now() - (st.link.at || 0) < LINK_RESEND_MS) return;
-    linkBusy = true;
-    linkPost('/' + st.link.reg, msg).then(function () {
-      linkBusy = false;
-      if (!st.link) return;
-      st.link.sig = msg; st.link.at = Date.now(); st.link.failed = false;
-      if (changed) { st.link.acks = []; st.link.changedAt = Date.now(); }
-      save(); renderLink();
-      if (changed) { setTimeout(linkPoll, 6000); setTimeout(linkPoll, 20000); }
-    }, function () {
-      linkBusy = false;
-      if (!st.link) return;
-      st.link.failed = true; save(); renderLink();
-    });
-  }
-  // 프로그램이 받았다는 답(SHIFTACK1) 확인
-  function linkPoll() {
-    if (!st.link) return;
-    fetch(st.link.server + '/' + st.link.reg + '/json?poll=1&since=15m').then(function (r) { return r.text(); }).then(function (txt) {
-      if (!st.link) return;
-      var seen = st.link.acks || [];
-      txt.split('\n').forEach(function (line) {
-        var d; try { d = JSON.parse(line); } catch (e) { return; }
-        var p = String(d.message || '').split(' ');
-        if (p[0] !== 'SHIFTACK1' || p[1] !== st.link.topic || d.time * 1000 < (st.link.changedAt || 0) - 60000) return;
-        var nm; try { nm = decodeURIComponent(p[2] || ''); } catch (e) { return; }
-        if (nm && seen.indexOf(nm) < 0) seen.push(nm);
-      });
-      st.link.acks = seen; save(); renderLink();
-    }).catch(function () {});
-  }
+  // ---- 설비 알람 채널: 프로그램의 앱 연결 링크에서 조별 ntfy 채널 이름을 읽어 이 폰에만 저장한다 ----
+  var linkEditing = false;
   function renderLink() {
-    var show = !framed() && !!window.fetch;
+    var show = !framed();
     $('linkBox').hidden = !show;
     if (!show) return;
-    $('linkOff').hidden = !!st.link;
-    $('linkOn').hidden = !st.link;
-    if (!st.link) return;
-    $('linkTopic').value = st.link.topic;
+    var c = st.channels, on = !!c && !linkEditing;
+    $('linkOff').hidden = on;
+    $('linkOn').hidden = !on;
+    if (!on) return;
+    $('linkLabel').textContent = st.team + '조 채널';
+    $('linkTopic').value = c.topics[st.team] || '';
+    $('linkDayBox').hidden = !c.topics.day;
+    $('linkDay').value = c.topics.day || '';
     var open = $('linkOpen');
     open.hidden = !/Android/i.test(navigator.userAgent);
-    open.href = 'ntfy://' + st.link.server.replace(/^https:\/\//, '') + '/' + st.link.topic;
-    var h = [], t = st.link.at ? new Date(st.link.at) : null;
-    h.push('<div class="nextA">' + esc(st.link.name) + ' · ' + esc(st.team) + '조 · 근무 변경 ' + Object.keys(ovs(st.team)).length + '건</div>');
-    if (st.link.failed) h.push('<div class="warn">아직 못 보냈어요. 인터넷이 연결되면 앱을 열 때 다시 보냅니다.</div>');
-    else if (t) h.push('<div>마지막 전송: ' + (t.getMonth() + 1) + '/' + t.getDate() + ' ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + '</div>');
-    var acks = st.link.acks || [];
-    if (acks.length) h.push('<div>설비 프로그램 확인: ' + acks.map(esc).join(', ') + '</div>');
-    else if (t) h.push('<div>설비 프로그램 확인을 기다리는 중 (안 뜨면 프로그램이 켜져 있는지, 근무조별 알림이 켜져 있는지 확인)</div>');
-    $('linkStatus').innerHTML = h.join('');
+    open.href = 'ntfy://' + c.server.replace(/^https:\/\//, '') + '/' + (c.topics[st.team] || '');
   }
-  function linkFlash(btn, text) {
-    var old = btn.dataset.label || btn.textContent; btn.dataset.label = old; btn.textContent = text;
-    setTimeout(function () { btn.textContent = old; }, 1800);
+  function linkApply(text) {
+    var c = S.parseChannels(text);
+    if (!c) return false;
+    st.channels = c; linkEditing = false;
+    save(); renderLink();
+    return true;
+  }
+  function linkCopy(input, btn) {
+    function done() { var old = btn.textContent; btn.textContent = '복사됨'; setTimeout(function () { btn.textContent = old; }, 1500); }
+    function legacy() { input.select(); try { document.execCommand('copy'); done(); } catch (e) {} }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(input.value).then(done, legacy);
+    else legacy();
   }
   $('linkGo').addEventListener('click', function () {
-    var j = S.parseJoin($('linkIn').value), nm = $('linkName').value.trim(), err = $('linkErr');
-    err.hidden = true;
-    if (!j) { err.textContent = '연결 링크가 아니에요. 받은 링크 전체를 붙여넣어 주세요.'; err.hidden = false; return; }
-    if (!nm) { err.textContent = '이름을 적어 주세요. 담당자 목록에 보입니다.'; err.hidden = false; return; }
-    st.link = { reg: j.reg, server: j.server, topic: newTopic(), name: nm, sig: '', at: 0, acks: [] };
-    $('linkIn').value = ''; save(); renderLink(); linkSync(true);
+    var ok = linkApply($('linkIn').value), err = $('linkErr');
+    err.hidden = ok;
+    if (ok) $('linkIn').value = '';
+    else err.textContent = '앱 연결 링크가 아니에요. 받은 링크 전체를 붙여넣어 주세요.';
   });
-  $('linkCopy').addEventListener('click', function () {
-    var inp = $('linkTopic'), done = function () { linkFlash($('linkCopy'), '복사됨'); };
-    function old() { inp.select(); try { document.execCommand('copy'); done(); } catch (e) {} }
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(inp.value).then(done, old);
-    else old();
-  });
-  $('linkTest').addEventListener('click', function () {
-    var b = $('linkTest');
-    // JSON 발송은 서버 맨 앞 주소로
-    linkPost('', JSON.stringify({ topic: st.link.topic, title: '시험 알림', message: '이 알림이 보이면 구독이 된 거예요' })).then(function () { linkFlash(b, '보냄'); }, function () { linkFlash(b, '실패'); });
-  });
-  $('linkSend').addEventListener('click', function () { linkFlash($('linkSend'), '보내는 중'); linkSync(true); setTimeout(linkPoll, 6000); });
-  $('linkOffBtn').addEventListener('click', function () {
-    if (!confirm('설비 알람 연결을 해제할까요?\n다시 연결하면 새 채널이 만들어져서 ntfy 앱에서 다시 구독해야 합니다.')) return;
-    linkPost('/' + st.link.reg, 'SHIFTDEL1 ' + st.link.topic).catch(function () {});
-    st.link = null; save(); renderLink();
-  });
-  window.addEventListener('online', function () { linkSync(); });
+  $('linkCopy').addEventListener('click', function () { linkCopy($('linkTopic'), $('linkCopy')); });
+  $('linkDayCopy').addEventListener('click', function () { linkCopy($('linkDay'), $('linkDayCopy')); });
+  $('linkReset').addEventListener('click', function () { linkEditing = true; renderLink(); $('linkIn').focus(); });
 
   // ---- 캘린더 내보내기 (.ics): 이번 달 1일부터 5년, 내 근무 변경 반영, 알림은 설정의 시각 ----
   var EX_MONTHS = 60;
@@ -1274,7 +1213,6 @@ a.btn.primary { color: var(--surface); }
     var old = today; setToday();
     if (!same(old, today)) { sel = Object.assign({}, today); view = { y: today.y, m: today.m }; render(); }
     syncAlarms();
-    linkSync();
   });
 
   // 공개 웹 주소에서만: 오프라인으로도 열리게 (sw.js 는 make-site.js 가 만듦)
@@ -1286,17 +1224,11 @@ a.btn.primary { color: var(--surface); }
   showStatus();
   syncAlarms();
   renderLink();
-  linkSync();
-  // 앱 연결 링크로 열었을 때: 칸을 채우고 설정을 연다. 홈 화면 앱은 브라우저와 저장 공간이 달라서 링크를 앱에 붙여넣어야 한다
-  var joined = S.parseJoin(location.hash);
-  if (joined && !st.link) {
-    $('linkIn').value = location.href;
+  // 앱 연결 링크로 열었을 때: 바로 넣고 설정을 보여 준다. 홈 화면 앱은 브라우저와 저장 공간이 달라서 안내를 띄운다
+  if (linkApply(location.hash)) {
     openSheet('sheet');
     $('linkBox').scrollIntoView();
-    if (isIOS() && !navigator.standalone) {
-      $('linkErr').textContent = '홈 화면에 추가한 앱을 쓰신다면, 이 링크를 복사해서 그 앱의 같은 칸에 붙여넣으세요.';
-      $('linkErr').hidden = false;
-    }
+    $('linkHint').hidden = !(isIOS() && !navigator.standalone);
   }
 })();
 </script>
