@@ -436,6 +436,33 @@ a.btn.primary { color: var(--surface); }
       </div>
     </div>
 
+    <div id="pushBox" hidden>
+      <h4>설비 알림</h4>
+      <div class="group">
+        <div class="linkform">
+          <div class="nm" id="pushState" role="status">알림 꺼짐</div>
+          <div class="warn" id="pushInstall" hidden>아이폰은 먼저 사파리 공유 버튼에서 <b>홈 화면에 추가</b>를 하고, 홈 화면의 앱에서 켜 주세요. iOS 16.4 이상에서 됩니다.</div>
+          <label for="pushLink">참여 링크</label>
+          <input id="pushLink" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="설비 담당자에게 받은 링크를 붙여넣기">
+          <label for="pushMode">받을 알림</label>
+          <select id="pushMode">
+            <option value="team">내 조가 근무할 때</option>
+            <option value="day">주간근무</option>
+            <option value="all">전체 (관리자 링크)</option>
+          </select>
+          <button type="button" class="btn primary" id="pushOn">알림 받기</button>
+          <div class="linkbtns" style="padding:8px 0 0;display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn" id="pushTest" style="flex:1 1 120px">시험 알림</button>
+            <button type="button" class="btn" id="pushOff" style="flex:1 1 120px">알림 끄기</button>
+            <button type="button" class="btn" id="pushCopy" hidden style="flex:1 1 120px">링크 복사</button>
+          </div>
+          <div class="warn" id="pushMsg" hidden></div>
+        </div>
+      </div>
+      <h4 style="margin-top:14px">최근 설비 알림</h4>
+      <div class="group"><div class="linkform" id="pushList"><div class="note" style="padding:0">알림을 켜면 여기에 나옵니다.</div></div></div>
+    </div>
+
     <div>
       <h4>조 순서</h4>
       <div class="group">
@@ -807,7 +834,7 @@ a.btn.primary { color: var(--surface); }
   orderSel.addEventListener('change', function () { st.order = orderSel.value; st.orderSet = true; save(); render(); syncAlarms(); });
 
   document.querySelectorAll('[data-team]').forEach(function (b) {
-    b.addEventListener('click', function () { st.team = b.dataset.team; save(); render(); syncAlarms(); renderLink(); });
+    b.addEventListener('click', function () { st.team = b.dataset.team; save(); render(); syncAlarms(); renderLink(); pushTeamChanged(); });
   });
   $('prev').addEventListener('click', function () { move(-1); });
   $('next').addEventListener('click', function () { move(1); });
@@ -1079,6 +1106,144 @@ a.btn.primary { color: var(--surface); }
   $('linkDayCopy').addEventListener('click', function () { linkCopy($('linkDay'), $('linkDayCopy')); });
   $('linkReset').addEventListener('click', function () { linkEditing = true; renderLink(); $('linkIn').focus(); });
 
+  // ---- 설비 알림 (Web Push). 서버 주소와 참여 코드는 공개 코드에 넣지 않고 받은 링크에서 읽어 이 기기에만 저장 ----
+  var PKEY = 'shiftcal-push', push = {};
+  try { push = JSON.parse(localStorage.getItem(PKEY)) || {}; } catch (e) {}
+  function pushSave() { try { localStorage.setItem(PKEY, JSON.stringify(push)); } catch (e) {} }
+  var pushOk = !native && !framed() && /^https?:$/.test(location.protocol) && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  function parsePush(text) {
+    var c = /[#&?]alarm=([^&\s]+)/.exec(String(text || '')), u = /[#&?]srv=([^&\s]+)/.exec(String(text || ''));
+    if (!c || !u) return null;
+    try {
+      var url = decodeURIComponent(u[1]).replace(/\/+$/, '');
+      if (!/^https?:\/\/[^\s/]+$/.test(url)) return null;
+      return { code: decodeURIComponent(c[1]), srv: url, link: 'alarm=' + c[1] + '&srv=' + u[1] };
+    } catch (e) { return null; }
+  }
+  function pushSay(t) { var m = $('pushMsg'); m.hidden = !t; m.textContent = t || ''; }
+  function pushTeam() { return push.mode === 'day' || push.mode === 'all' ? push.mode : st.team; }
+  function pushApi(path, body) {
+    return fetch(push.srv + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; }); });
+  }
+  function b64uBytes(s) {
+    var t = atob(s.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(s.length / 4) * 4, '='));
+    return Uint8Array.from(t, function (c) { return c.charCodeAt(0); });
+  }
+  function bytesB64u(buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function subBody(s) { return s ? { kind: 'web', endpoint: s.endpoint, p256dh: bytesB64u(s.getKey('p256dh')), auth: bytesB64u(s.getKey('auth')) } : null; }
+  function pushSub() {
+    return navigator.serviceWorker.getRegistration().then(function (r) { return r ? r.pushManager.getSubscription() : null; }).then(subBody);
+  }
+  function renderPush() {
+    var show = pushOk || (isIOS() && !native && !framed() && /^https?:$/.test(location.protocol));
+    $('pushBox').hidden = !show;
+    if (!show) return;
+    var standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    $('pushInstall').hidden = !(isIOS() && !standalone);
+    $('pushMode').value = push.mode || 'team';
+    $('pushLink').placeholder = push.code ? '링크 저장됨. 바꿀 때만 붙여넣기' : '설비 담당자에게 받은 링크를 붙여넣기';
+    $('pushCopy').hidden = !(isIOS() && !standalone && push.link);
+    var s = $('pushState');
+    s.textContent = push.active ? '알림 받는 중 (' + (push.mode === 'day' ? '주간근무' : push.mode === 'all' ? '전체' : st.team + '조') + ')' : '알림 꺼짐';
+    s.style.color = push.active ? 'var(--ok)' : '';
+  }
+  function pushLinkInput() {
+    var p = parsePush($('pushLink').value);
+    if (p) { push.code = p.code; push.srv = p.srv; push.link = p.link; pushSave(); $('pushLink').value = ''; }
+    return !!(push.code && push.srv);
+  }
+  function pushRegister() {
+    return pushSub().then(function (dev) {
+      if (!dev) return null;
+      dev.code = push.code; dev.team = pushTeam();
+      return pushApi('/api/subscribe', dev);
+    });
+  }
+  $('pushOn').addEventListener('click', function () {
+    if (!pushLinkInput()) { pushSay('받은 참여 링크를 붙여넣어 주세요.'); return; }
+    if (!pushOk) { pushSay('이 브라우저에서는 알림을 받을 수 없습니다. 아이폰은 홈 화면에 추가한 앱에서 켜 주세요.'); return; }
+    push.mode = $('pushMode').value; pushSave();
+    pushSay('등록하는 중…');
+    Notification.requestPermission().then(function (perm) {
+      if (perm !== 'granted') throw new Error('알림 권한이 꺼져 있습니다. 폰 설정에서 이 앱의 알림을 허용해 주세요.');
+      return Promise.all([navigator.serviceWorker.register('sw.js').then(function () { return navigator.serviceWorker.ready; }),
+        fetch(push.srv + '/api/config').then(function (r) { return r.json(); })]);
+    }).then(function (a) {
+      return a[0].pushManager.getSubscription().then(function (s) {
+        return s || a[0].pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(a[1].vapid) });
+      });
+    }).then(function () { return pushRegister(); }).then(function (j) {
+      if (!j || !j.ok) throw new Error(j && j.status === 403 ? '참여 링크가 맞지 않습니다.' : j && j.status === 400 ? '이 링크로는 고를 수 없는 알림입니다.' : '서버에 등록하지 못했습니다.');
+      push.active = true; pushSave();
+      pushSay('등록했습니다. 시험 알림을 눌러 확인해 보세요.');
+      renderPush(); loadPushList();
+    }).catch(function (e) { pushSay(e.message); });
+  });
+  $('pushTest').addEventListener('click', function () {
+    if (!pushOk || !push.code) { pushSay('먼저 알림 받기를 눌러 주세요.'); return; }
+    pushSub().then(function (d) {
+      if (!d) { pushSay('먼저 알림 받기를 눌러 주세요.'); return; }
+      d.code = push.code; pushSay('보내는 중…');
+      return pushApi('/api/test', d).then(function (j) { pushSay(j.ok ? '보냈습니다. 잠시 뒤 도착합니다.' : j.status === 404 ? '먼저 알림 받기를 눌러 주세요.' : '보내지 못했습니다.'); });
+    }).catch(function (e) { pushSay(e.message); });
+  });
+  $('pushOff').addEventListener('click', function () {
+    if (!pushOk) return;
+    pushSub().then(function (d) {
+      push.active = false; pushSave();
+      if (!d || !push.srv) return;
+      return pushApi('/api/unsubscribe', d).then(function () {
+        return navigator.serviceWorker.getRegistration().then(function (r) { return r && r.pushManager.getSubscription(); }).then(function (s) { return s && s.unsubscribe(); });
+      });
+    }).then(function () { pushSay('알림을 껐습니다.'); renderPush(); }).catch(function (e) { pushSay(e.message); });
+  });
+  $('pushCopy').addEventListener('click', function () {
+    var t = location.origin + location.pathname + '#' + push.link;
+    if (navigator.clipboard) navigator.clipboard.writeText(t).then(function () { pushSay('복사했습니다. 홈 화면의 앱에서 참여 링크 칸에 붙여넣어 주세요.'); }, function () { pushSay(t); });
+    else pushSay(t);
+  });
+  $('pushMode').addEventListener('change', function () {
+    push.mode = this.value; pushSave();
+    if (!push.active) return;
+    pushRegister().then(function (j) { if (j && !j.ok) pushSay(j.status === 400 ? '이 링크로는 고를 수 없는 알림입니다.' : '바꾸지 못했습니다.'); renderPush(); }).catch(function () {});
+  });
+  // 근무표에서 조를 바꾸면 알림 조도 따라감
+  function pushTeamChanged() {
+    renderPush();
+    if (pushOk && push.active && push.code) pushRegister().catch(function () {});
+  }
+  function pushTime(ms) {
+    var d = new Date(ms), p = function (x) { return ('0' + x).slice(-2); };
+    return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function loadPushList() {
+    if (!push.code || !push.srv) return;
+    fetch(push.srv + '/api/messages?limit=30', { headers: { 'x-code': push.code } }).then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (j) {
+      var box = $('pushList');
+      box.textContent = '';
+      if (!j.messages.length) { var n = document.createElement('div'); n.className = 'note'; n.style.padding = '0'; n.textContent = '아직 알림이 없습니다.'; box.appendChild(n); return; }
+      j.messages.forEach(function (x) {
+        var d = document.createElement('div'); d.style.cssText = 'padding:9px 0;border-bottom:1px solid var(--hair);overflow-wrap:anywhere';
+        var b = document.createElement('div'); b.className = 'nm'; b.textContent = x.title; if (x.prio >= 5) b.style.color = 'var(--warn)'; d.appendChild(b);
+        var t = document.createElement('div'); t.className = 'note'; t.style.padding = '0'; t.textContent = pushTime(x.at); d.appendChild(t);
+        if (x.text) { var p = document.createElement('div'); p.className = 'ds'; p.style.whiteSpace = 'pre-wrap'; p.textContent = x.text; d.appendChild(p); }
+        if (x.hasImage) {
+          var pic = document.createElement('button'); pic.type = 'button'; pic.className = 'btn'; pic.style.marginTop = '6px'; pic.textContent = '사진 보기';
+          pic.addEventListener('click', function () {
+            fetch(push.srv + '/api/image/' + encodeURIComponent(x.id), { headers: { 'x-code': push.code } }).then(function (r) { if (!r.ok) throw 0; return r.blob(); }).then(function (bl) {
+              var im = document.createElement('img'); im.alt = x.title + ' 사진'; im.style.cssText = 'max-width:100%;display:block;margin-top:6px;border-radius:6px'; im.src = URL.createObjectURL(bl); pic.replaceWith(im);
+            }).catch(function () { pic.textContent = '사진을 불러오지 못했습니다'; });
+          });
+          d.appendChild(pic);
+        }
+        box.appendChild(d);
+      });
+    }).catch(function () {});
+  }
+  if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', loadPushList);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) loadPushList(); });
+
   // ---- 캘린더 내보내기 (.ics): 이번 달 1일부터 5년, 내 근무 변경 반영, 알림은 설정의 시각 ----
   var EX_MONTHS = 60;
   function exRange() {
@@ -1224,6 +1389,19 @@ a.btn.primary { color: var(--surface); }
   showStatus();
   syncAlarms();
   renderLink();
+  renderPush();
+  loadPushList();
+  // 설비 알림 링크로 열었을 때: 저장하고 주소창에서 지운 뒤 설정을 보여 준다
+  var pushFromLink = parsePush(location.hash);
+  if (pushFromLink && !native) {
+    push.code = pushFromLink.code; push.srv = pushFromLink.srv; push.link = pushFromLink.link; pushSave();
+    history.replaceState(null, '', location.pathname);
+    renderPush(); loadPushList();
+    openSheet('sheet');
+    $('pushBox').scrollIntoView();
+  }
+  // 구독이 바뀌었을 수 있어서 열 때마다 서버와 맞춤
+  if (pushOk && push.active && push.code) pushRegister().catch(function () {});
   // 앱 연결 링크로 열었을 때: 바로 넣고 설정을 보여 준다. 홈 화면 앱은 브라우저와 저장 공간이 달라서 안내를 띄운다
   if (linkApply(location.hash)) {
     openSheet('sheet');
