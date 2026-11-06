@@ -455,7 +455,8 @@ a.btn.primary { color: var(--surface); }
         </div>
       </div>
       <h4 style="margin-top:14px">최근 설비 알림</h4>
-      <div class="group"><div class="linkform" id="pushList"><div class="note" style="padding:0">알림을 켜면 여기에 나옵니다.</div></div></div>
+      <!-- 목록은 상자 안에서만 스크롤 (최신이 위). 설정 화면이 한없이 길어지지 않게 -->
+      <div class="group"><div class="linkform" id="pushList" style="max-height:55vh;max-height:55dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch"><div class="note" style="padding:0">알림을 켜면 여기에 나옵니다.</div></div></div>
     </div>
 
     <div>
@@ -1247,9 +1248,11 @@ a.btn.primary { color: var(--surface); }
       box.textContent = '';
       if (!j.messages.length) { var n = document.createElement('div'); n.className = 'note'; n.style.padding = '0'; n.textContent = '아직 알림이 없습니다.'; box.appendChild(n); return; }
       j.messages.forEach(function (x) {
-        var d = document.createElement('div'); d.style.cssText = 'padding:9px 0;border-bottom:1px solid var(--hair);overflow-wrap:anywhere';
-        var b = document.createElement('div'); b.className = 'nm'; b.textContent = x.title; if (x.prio >= 5) b.style.color = 'var(--warn)'; d.appendChild(b);
-        var t = document.createElement('div'); t.className = 'note'; t.style.padding = '0'; t.textContent = pushTime(x.at); d.appendChild(t);
+        var d = document.createElement('div'); d.style.cssText = 'padding:8px 0;border-bottom:1px solid var(--hair);overflow-wrap:anywhere';
+        var hd = document.createElement('div'); hd.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:8px';
+        var b = document.createElement('div'); b.className = 'nm'; b.textContent = x.title; if (x.prio >= 5) b.style.color = 'var(--warn)'; hd.appendChild(b);
+        var t = document.createElement('div'); t.className = 'note'; t.style.cssText = 'padding:0;flex:none'; t.textContent = pushTime(x.at); hd.appendChild(t);
+        d.appendChild(hd);
         if (x.text) { var p = document.createElement('div'); p.className = 'ds'; p.style.whiteSpace = 'pre-wrap'; p.textContent = x.text; d.appendChild(p); }
         if (x.hasImage) {
           var pic = document.createElement('button'); pic.type = 'button'; pic.className = 'btn'; pic.style.marginTop = '6px'; pic.textContent = '사진 보기';
@@ -1262,6 +1265,8 @@ a.btn.primary { color: var(--surface); }
         }
         box.appendChild(d);
       });
+      var c = document.createElement('div'); c.className = 'note'; c.style.cssText = 'padding:8px 0 0;text-align:center'; c.textContent = '최근 ' + j.messages.length + '건 (30일 보관)'; box.appendChild(c);
+      box.scrollTop = 0;
     }).catch(function (st) {
       var box = $('pushList'), n = $('pushListErr');
       if (!n) { n = document.createElement('div'); n.id = 'pushListErr'; n.className = 'note'; n.style.cssText = 'padding:0 0 6px;color:var(--warn)'; box.insertBefore(n, box.firstChild); }
