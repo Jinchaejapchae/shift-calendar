@@ -1092,19 +1092,29 @@ a.btn.primary { color: var(--surface); }
   var PKEY = 'shiftcal-push', push = {};
   try { push = JSON.parse(localStorage.getItem(PKEY)) || {}; } catch (e) {}
   function pushSave() { try { localStorage.setItem(PKEY, JSON.stringify(push)); } catch (e) {} }
-  // 받은 링크의 서버 주소는 우리 서버 형식만 받음 (주소만 바꾼 가짜 링크로 다른 서버에 등록되는 것을 막음)
-  function srvOk(url) {
-    if (/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.workers\.dev$/i.test(url)) return true;
+  // 받은 링크의 서버는 우리 서버만 받음 (주소만 바꾼 가짜 링크로 다른 서버에 등록되는 것을 막음).
+  // 공개 코드라 주소 대신 지문(주소의 SHA-256)만 넣는다. 서버를 새 주소로 다시 배포하면 이 값을 바꿔야 함 (OcsPush deploy.mjs 가 알려 줌)
+  var SRV_HASHES = ['f10c11102cf9ae7d375f0a06a9855d883586f61b42af9ecb0a6a9f99fa23f1bb'];
+  var BAD_SRV = '우리 설비 알림 서버의 링크가 아닙니다. 설비 담당자에게 받은 링크인지 확인해 주세요.';
+  function srvLocal(url) { // 이 PC에서 시험할 때만 (공개 사이트 주소에서는 해당 없음)
     return /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(url);
   }
-  if (push.srv && !srvOk(push.srv)) push = {};
+  function srvCheck(url) {
+    if (srvLocal(url)) return Promise.resolve(true);
+    if (!/^https:\/\/[^\s/]+$/.test(url) || !(window.crypto && crypto.subtle)) return Promise.resolve(false);
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(url.toLowerCase())).then(function (b) {
+      var h = Array.prototype.map.call(new Uint8Array(b), function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+      return SRV_HASHES.indexOf(h) >= 0;
+    }, function () { return false; });
+  }
+  var pushTrust = push.srv ? srvCheck(push.srv) : Promise.resolve(true);
   var pushOk = !native && !framed() && /^https?:$/.test(location.protocol) && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   function parsePush(text) {
     var c = /[#&?]alarm=([^&\s]+)/.exec(String(text || '')), u = /[#&?]srv=([^&\s]+)/.exec(String(text || ''));
     if (!c || !u) return null;
     try {
       var url = decodeURIComponent(u[1]).replace(/\/+$/, '');
-      if (!srvOk(url)) return null;
+      if (!/^https:\/\/[^\s/]+$/.test(url) && !srvLocal(url)) return null;
       return { code: decodeURIComponent(c[1]), srv: url, link: 'alarm=' + c[1] + '&srv=' + u[1] };
     } catch (e) { return null; }
   }
@@ -1136,10 +1146,23 @@ a.btn.primary { color: var(--surface); }
     s.textContent = push.active ? '알림 받는 중 (' + (push.mode === 'day' ? '주간근무' : push.mode === 'all' ? '전체' : st.team + '조') + ')' : '알림 꺼짐';
     s.style.color = push.active ? 'var(--ok)' : '';
   }
-  function pushLinkInput() {
-    var p = parsePush($('pushLink').value);
-    if (p) { push.code = p.code; push.srv = p.srv; push.link = p.link; pushSave(); $('pushLink').value = ''; }
-    return !!(push.code && push.srv);
+  // 붙여넣는 순간 서버를 확인해 둔다 (누를 때 기다리면 아이폰이 알림 권한 창을 안 띄울 수 있음)
+  var pushPaste = null;
+  $('pushLink').addEventListener('input', function () {
+    var text = this.value, p = parsePush(text), cur = p ? { text: text, p: p, ok: null } : null;
+    pushPaste = cur;
+    if (p) srvCheck(p.srv).then(function (ok) { cur.ok = ok; if (!ok) pushSay(BAD_SRV); });
+  });
+  function pushLinkInput() { // 문제가 있으면 안내 문구, 없으면 ''
+    var text = $('pushLink').value;
+    if (text.trim()) {
+      var c = pushPaste && pushPaste.text === text ? pushPaste : null;
+      if (!c) return '받은 참여 링크를 그대로 붙여넣어 주세요.';
+      if (c.ok === null) return '링크를 확인하는 중입니다. 잠시 뒤 다시 눌러 주세요.';
+      if (!c.ok) return BAD_SRV;
+      push.code = c.p.code; push.srv = c.p.srv; push.link = c.p.link; pushSave(); $('pushLink').value = ''; pushPaste = null;
+    }
+    return push.code && push.srv ? '' : '받은 참여 링크를 붙여넣어 주세요.';
   }
   function pushRegister() {
     return pushSub().then(function (dev) {
@@ -1149,7 +1172,8 @@ a.btn.primary { color: var(--surface); }
     });
   }
   $('pushOn').addEventListener('click', function () {
-    if (!pushLinkInput()) { pushSay('받은 참여 링크를 붙여넣어 주세요.'); return; }
+    var linkErr = pushLinkInput();
+    if (linkErr) { pushSay(linkErr); return; }
     if (!pushOk) { pushSay('이 브라우저에서는 알림을 받을 수 없습니다. 아이폰은 홈 화면에 추가한 앱에서 켜 주세요.'); return; }
     push.mode = $('pushMode').value; pushSave();
     pushSay('등록하는 중…');
@@ -1393,18 +1417,28 @@ a.btn.primary { color: var(--surface); }
   syncAlarms();
   renderLink();
   renderPush();
-  loadPushList();
-  // 설비 알림 링크로 열었을 때: 저장하고 주소창에서 지운 뒤 설정을 보여 준다
+  // 설비 알림 링크로 열었을 때: 주소창에서 지우고, 우리 서버가 맞으면 저장한 뒤 설정을 보여 준다
   var pushFromLink = parsePush(location.hash);
-  if (pushFromLink && !native) {
-    push.code = pushFromLink.code; push.srv = pushFromLink.srv; push.link = pushFromLink.link; pushSave();
-    history.replaceState(null, '', location.pathname);
-    renderPush(); loadPushList();
-    openSheet('sheet');
-    $('pushBox').scrollIntoView();
-  }
-  // 구독이 바뀌었을 수 있어서 열 때마다 서버와 맞춤
-  pushCheck();
+  if (pushFromLink && !native) history.replaceState(null, '', location.pathname);
+  pushTrust.then(function (ok) {
+    if (!ok) { push = {}; pushSave(); renderPush(); } // 예전에 저장된 다른 서버는 버림
+    if (!pushFromLink || native) return;
+    return srvCheck(pushFromLink.srv).then(function (good) {
+      openSheet('sheet');
+      $('pushBox').scrollIntoView();
+      if (!good) { pushSay(BAD_SRV); return; }
+      // 이미 쓰던 서버를 다른 서버로 바꾸는 링크는 한 번 묻는다
+      if (push.srv && push.srv !== pushFromLink.srv &&
+          !confirm('설비 알림 서버를 바꾸는 링크입니다. 설비 담당자에게 새로 받은 링크가 맞나요?\n\n지금: ' + push.srv.replace(/^https?:\/\//, '') + '\n새 서버: ' + pushFromLink.srv.replace(/^https?:\/\//, ''))) {
+        pushSay('링크를 적용하지 않았습니다.'); return;
+      }
+      push.code = pushFromLink.code; push.srv = pushFromLink.srv; push.link = pushFromLink.link; pushSave();
+      renderPush();
+    });
+  }).then(function () {
+    loadPushList();
+    pushCheck(); // 구독이 바뀌었을 수 있어서 열 때마다 서버와 맞춤
+  });
   // 앱 연결 링크로 열었을 때: 바로 넣고 설정을 보여 준다. 홈 화면 앱은 브라우저와 저장 공간이 달라서 안내를 띄운다
   if (linkApply(location.hash)) {
     openSheet('sheet');
