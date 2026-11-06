@@ -396,11 +396,6 @@ a.btn.primary { color: var(--surface); }
           <label class="sw"><input type="checkbox" id="aEve" aria-label="전날 미리 알림"><i></i></label>
         </div>
         <div class="times"><label for="aEveTime">알림 시각</label><input type="time" id="aEveTime"></div>
-        <div class="item">
-          <div class="txt"><div class="nm">휴무 시작 알림</div><div class="ds">휴무 첫날 "오늘부터 휴무 2일"</div></div>
-          <label class="sw"><input type="checkbox" id="aOff" aria-label="휴무 시작 알림"><i></i></label>
-        </div>
-        <div class="times"><label for="aOffTime">알림 시각</label><input type="time" id="aOffTime"></div>
         <div class="status" id="aStatus"></div>
       </div>
     </div>
@@ -464,15 +459,7 @@ a.btn.primary { color: var(--surface); }
     </div>
 
     <div>
-      <h4>조 순서</h4>
-      <div class="group">
-        <div class="item">
-          <div class="txt"><div class="ds">주간에 들어오는 순서 (2일 간격)</div>
-            <select id="order" aria-label="주간에 들어오는 조 순서"></select></div>
-        </div>
-      </div>
-      <p class="note">근무 패턴: 주 주 휴 휴 야 야 휴 휴 (8일 반복)<br>기준: 2026-10-31(토) = D조 주간 첫날
-        <span class="webonly" id="orderWarn" hidden><br>기본 순서(D → A → C → B)와 다르게 설정되어 있습니다.</span></p>
+      <p class="note">근무 패턴: 주 주 휴 휴 야 야 휴 휴 (8일 반복, 끝없이 이어짐)<br>주간 순서: D → A → C → B · 기준: 2026-10-31(토) = D조 주간 첫날</p>
     </div>
   </div>
 </section>
@@ -782,13 +769,14 @@ a.btn.primary { color: var(--surface); }
     var saved = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (saved.team) st.team = saved.team;
     // 조 순서는 사용자가 설정에서 직접 고른 경우만 따른다. 예전 판은 기본값(D→A→B→C, 틀렸던 순서)도 저장했으므로 무시
-    if (saved.order && saved.orderSet) { st.order = saved.order; st.orderSet = true; }
     if (saved.view === 'all') st.view = 'all';
     if (saved.ios && typeof saved.ios === 'object') st.ios = { on: !!saved.ios.on, sent: saved.ios.sent || null, times: saved.ios.times || null };
     if (saved.overrides && typeof saved.overrides === 'object') st.overrides = saved.overrides;
     if (saved.channels && typeof saved.channels === 'object') st.channels = saved.channels;
     if (saved.alarms) ['wake', 'eve', 'off'].forEach(function (k) { if (saved.alarms[k]) Object.assign(st.alarms[k], saved.alarms[k]); });
   } catch (e) {}
+  // 휴무 시작 알림은 없앰 (예전에 켜 둔 사람도 꺼서, 이미 예약된 알림이 다음 동기화 때 지워지게)
+  st.alarms.off.on = false;
   if (!st.ios.times) st.ios.times = { day: st.alarms.wake.day, night: st.alarms.wake.night }; // 시각 변경 비교 기준
   function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }
 
@@ -823,15 +811,8 @@ a.btn.primary { color: var(--surface); }
     return null;
   }
 
-  // ---- 조 순서 ----
-  var orderSel = $('order');
-  S.allOrders().forEach(function (o) {
-    var op = document.createElement('option'); op.value = o.join(''); op.textContent = o.join(' → ') + ' → ' + o[0];
-    orderSel.appendChild(op);
-  });
-  if (!S.allOrders().some(function (o) { return o.join('') === st.order; })) st.order = S.DEFAULT_ORDER.join('');
-  orderSel.value = st.order;
-  orderSel.addEventListener('change', function () { st.order = orderSel.value; st.orderSet = true; save(); render(); syncAlarms(); });
+  // ---- 조 순서: 고정 (D → A → C → B). 예전에 다른 순서를 골라 둔 사람도 기본으로 되돌린다 ----
+  st.order = S.DEFAULT_ORDER.join(''); delete st.orderSet;
 
   document.querySelectorAll('[data-team]').forEach(function (b) {
     b.addEventListener('click', function () { st.team = b.dataset.team; save(); render(); syncAlarms(); renderLink(); pushTeamChanged(); });
@@ -861,7 +842,6 @@ a.btn.primary { color: var(--surface); }
   function render() {
     var ord = order();
     document.querySelectorAll('[data-team]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.team === st.team)); });
-    $('orderWarn').hidden = st.order === S.DEFAULT_ORDER.join('');
 
     // 오늘 카드
     var tk = sh(st.team, today);
@@ -1002,7 +982,8 @@ a.btn.primary { color: var(--surface); }
 
   // ---- 아이폰 시계 알람: 단축어 '교대알람' 에 앞으로 400일 내 근무(변경 반영)를 글자로 넘긴다 ----
   // 단축어가 파일로 저장하고, 매일 밤 자동화가 내일 근무를 보고 시계 앱 알람 2개를 켜고 끈다 (iphone-alarm.html)
-  var IOS_SHORTCUT = '교대알람', IOS_TIME_SHORTCUT = '교대시각', IOS_DAYS = 400, IOS_WARN_DAYS = 30;
+  // 근무표가 끊기지 않게 10년치를 보낸다 (클립보드, 약 37KB). 주소에 같이 넣는 입력은 예전처럼 400일만 (주소가 너무 길면 안 열릴 수 있음)
+  var IOS_SHORTCUT = '교대알람', IOS_TIME_SHORTCUT = '교대시각', IOS_DAYS = 3650, IOS_URL_DAYS = 400, IOS_WARN_DAYS = 30;
   function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
   function iosSig() {
     var o = ovs(st.team), keys = Object.keys(o).sort();
@@ -1034,7 +1015,8 @@ a.btn.primary { color: var(--surface); }
     save(); renderIos();
     // 단축어는 클립보드에서 읽는다 (iOS 버전에 따라 '단축어 입력' 설정 메뉴가 없어서). 입력으로도 같이 넘긴다
     // 시각이 바뀌었을 때만 「교대시각」(시각 맞춘 뒤 「교대알람」 실행)을 부른다
-    var url = 'shortcuts://run-shortcut?name=' + encodeURIComponent(sendTimes ? IOS_TIME_SHORTCUT : IOS_SHORTCUT) + '&input=text&text=' + encodeURIComponent(plan);
+    var parts = plan.split(' '), head = parts.slice(0, parts.length - IOS_DAYS + IOS_URL_DAYS).join(' ');
+    var url = 'shortcuts://run-shortcut?name=' + encodeURIComponent(sendTimes ? IOS_TIME_SHORTCUT : IOS_SHORTCUT) + '&input=text&text=' + encodeURIComponent(head);
     function go() { location.href = url; }
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(plan).then(go, go);
     else go();
@@ -1110,13 +1092,19 @@ a.btn.primary { color: var(--surface); }
   var PKEY = 'shiftcal-push', push = {};
   try { push = JSON.parse(localStorage.getItem(PKEY)) || {}; } catch (e) {}
   function pushSave() { try { localStorage.setItem(PKEY, JSON.stringify(push)); } catch (e) {} }
+  // 받은 링크의 서버 주소는 우리 서버 형식만 받음 (주소만 바꾼 가짜 링크로 다른 서버에 등록되는 것을 막음)
+  function srvOk(url) {
+    if (/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.workers\.dev$/i.test(url)) return true;
+    return /^(127\.0\.0\.1|localhost)$/.test(location.hostname) && /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(url);
+  }
+  if (push.srv && !srvOk(push.srv)) push = {};
   var pushOk = !native && !framed() && /^https?:$/.test(location.protocol) && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   function parsePush(text) {
     var c = /[#&?]alarm=([^&\s]+)/.exec(String(text || '')), u = /[#&?]srv=([^&\s]+)/.exec(String(text || ''));
     if (!c || !u) return null;
     try {
       var url = decodeURIComponent(u[1]).replace(/\/+$/, '');
-      if (!/^https?:\/\/[^\s/]+$/.test(url)) return null;
+      if (!srvOk(url)) return null;
       return { code: decodeURIComponent(c[1]), srv: url, link: 'alarm=' + c[1] + '&srv=' + u[1] };
     } catch (e) { return null; }
   }
@@ -1190,13 +1178,17 @@ a.btn.primary { color: var(--surface); }
   });
   $('pushOff').addEventListener('click', function () {
     if (!pushOk) return;
+    pushSay('끄는 중…');
     pushSub().then(function (d) {
-      push.active = false; pushSave();
-      if (!d || !push.srv) return;
-      return pushApi('/api/unsubscribe', d).then(function () {
+      if (!d) return;
+      var server = push.srv ? pushApi('/api/unsubscribe', d).catch(function () { return {}; }) : Promise.resolve({});
+      return server.then(function () {
         return navigator.serviceWorker.getRegistration().then(function (r) { return r && r.pushManager.getSubscription(); }).then(function (s) { return s && s.unsubscribe(); });
       });
-    }).then(function () { pushSay('알림을 껐습니다.'); renderPush(); }).catch(function (e) { pushSay(e.message); });
+    }).then(function (gone) {
+      if (gone === false) throw new Error('알림을 끄지 못했습니다. 잠시 뒤 다시 눌러 주세요.');
+      push.active = false; pushSave(); pushSay('알림을 껐습니다.'); renderPush();
+    }).catch(function (e) { pushSay((e && e.message) || '알림을 끄지 못했습니다. 잠시 뒤 다시 눌러 주세요.'); });
   });
   $('pushCopy').addEventListener('click', function () {
     var t = location.origin + location.pathname + '#' + push.link;
@@ -1208,18 +1200,25 @@ a.btn.primary { color: var(--surface); }
     if (!push.active) return;
     pushRegister().then(function (j) { if (j && !j.ok) pushSay(j.status === 400 ? '이 링크로는 고를 수 없는 알림입니다.' : '바꾸지 못했습니다.'); renderPush(); }).catch(function () {});
   });
-  // 근무표에서 조를 바꾸면 알림 조도 따라감
-  function pushTeamChanged() {
-    renderPush();
-    if (pushOk && push.active && push.code) pushRegister().catch(function () {});
+  function pushLost(t) { push.active = false; pushSave(); renderPush(); pushSay(t); }
+  // 아이폰은 구독을 스스로 없애기도 해서, 열 때마다 실제 구독을 확인하고 서버와 맞춤
+  function pushCheck() {
+    if (!(pushOk && push.active && push.code)) return;
+    if (Notification.permission !== 'granted') { pushLost('알림 권한이 꺼져 있습니다. 폰 설정에서 이 앱의 알림을 허용한 뒤 알림 받기를 다시 눌러 주세요.'); return; }
+    pushRegister().then(function (j) {
+      if (j === null) pushLost('알림 연결이 끊겼습니다. 알림 받기를 다시 눌러 주세요.');
+      else if (j.status === 403) pushLost('참여 링크가 바뀌었습니다. 새 링크를 붙여넣고 알림 받기를 눌러 주세요.');
+    }).catch(function () {});
   }
+  // 근무표에서 조를 바꾸면 알림 조도 따라감
+  function pushTeamChanged() { renderPush(); pushCheck(); }
   function pushTime(ms) {
     var d = new Date(ms), p = function (x) { return ('0' + x).slice(-2); };
     return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
   function loadPushList() {
     if (!push.code || !push.srv) return;
-    fetch(push.srv + '/api/messages?limit=30', { headers: { 'x-code': push.code } }).then(function (r) { if (!r.ok) throw 0; return r.json(); }).then(function (j) {
+    fetch(push.srv + '/api/messages?limit=30', { headers: { 'x-code': push.code } }).then(function (r) { if (!r.ok) throw r.status; return r.json(); }).then(function (j) {
       var box = $('pushList');
       box.textContent = '';
       if (!j.messages.length) { var n = document.createElement('div'); n.className = 'note'; n.style.padding = '0'; n.textContent = '아직 알림이 없습니다.'; box.appendChild(n); return; }
@@ -1239,10 +1238,14 @@ a.btn.primary { color: var(--surface); }
         }
         box.appendChild(d);
       });
-    }).catch(function () {});
+    }).catch(function (st) {
+      var box = $('pushList'), n = $('pushListErr');
+      if (!n) { n = document.createElement('div'); n.id = 'pushListErr'; n.className = 'note'; n.style.cssText = 'padding:0 0 6px;color:var(--warn)'; box.insertBefore(n, box.firstChild); }
+      n.textContent = st === 403 ? '참여 링크가 맞지 않아 알림 목록을 볼 수 없습니다.' : '알림 목록을 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.';
+    });
   }
   if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', loadPushList);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) loadPushList(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) { loadPushList(); pushCheck(); } });
 
   // ---- 캘린더 내보내기 (.ics): 이번 달 1일부터 5년, 내 근무 변경 반영, 알림은 설정의 시각 ----
   var EX_MONTHS = 60;
@@ -1312,7 +1315,7 @@ a.btn.primary { color: var(--surface); }
 
   var F = {
     aWake: ['wake', 'on'], aWakeDay: ['wake', 'day'], aWakeNight: ['wake', 'night'],
-    aEve: ['eve', 'on'], aEveTime: ['eve', 'time'], aOff: ['off', 'on'], aOffTime: ['off', 'time']
+    aEve: ['eve', 'on'], aEveTime: ['eve', 'time']
   };
   Object.keys(F).forEach(function (id) {
     var el = $(id), f = F[id];
@@ -1401,7 +1404,7 @@ a.btn.primary { color: var(--surface); }
     $('pushBox').scrollIntoView();
   }
   // 구독이 바뀌었을 수 있어서 열 때마다 서버와 맞춤
-  if (pushOk && push.active && push.code) pushRegister().catch(function () {});
+  pushCheck();
   // 앱 연결 링크로 열었을 때: 바로 넣고 설정을 보여 준다. 홈 화면 앱은 브라우저와 저장 공간이 달라서 안내를 띄운다
   if (linkApply(location.hash)) {
     openSheet('sheet');
