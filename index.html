@@ -805,7 +805,7 @@ a.btn.primary { color: var(--surface); }
   // 그날 이후 처음으로 근무가 바뀌는 날
   function nextChange(team, o) {
     var cur = sh(team, o);
-    for (var n = 1; n <= 8; n++) {
+    for (var n = 1; n <= 366; n++) { // 긴 휴가·대근이 있어도 다음 근무를 찾는다
       var t = norm(o.y, o.m, o.d + n), k = sh(team, t);
       if (k !== cur) return { date: t, shift: k, len: S.runLength(team, t.y, t.m, t.d, order(), ovs(team)) };
     }
@@ -1011,17 +1011,24 @@ a.btn.primary { color: var(--surface); }
     var plan = S.alarmPlan(st.team, order(), ovs(st.team), from, IOS_DAYS, sendTimes ? curTimes() : null);
     if (allOff === true) plan = plan.replace(/(\d{8})[DN]/g, '$1O');
     var end = new Date(today.y, today.m, today.d + IOS_DAYS - 1);
-    st.ios.sent = { sig: allOff === true ? 'OFF' : iosSig(), until: S.dateKey(end.getFullYear(), end.getMonth(), end.getDate()).replace(/-/g, ''), at: Date.now() };
-    if (sendTimes) st.ios.times = curTimes();
-    save(); renderIos();
+    var sent = { sig: allOff === true ? 'OFF' : iosSig(), until: S.dateKey(end.getFullYear(), end.getMonth(), end.getDate()).replace(/-/g, ''), at: Date.now() };
     // 단축어는 클립보드에서 읽는다 (iOS 버전에 따라 '단축어 입력' 설정 메뉴가 없어서). 입력으로도 같이 넘긴다
     // 시각이 바뀌었을 때만 「교대시각」(시각 맞춘 뒤 「교대알람」 실행)을 부른다
     var parts = plan.split(' '), head = parts.slice(0, parts.length - IOS_DAYS + IOS_URL_DAYS).join(' ');
     var url = 'shortcuts://run-shortcut?name=' + encodeURIComponent(sendTimes ? IOS_TIME_SHORTCUT : IOS_SHORTCUT) + '&input=text&text=' + encodeURIComponent(head);
-    function go() { location.href = url; }
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(plan).then(go, go);
-    else go();
+    // 클립보드에 넣었을 때만 '반영함'으로 기록한다. 못 넣으면 단축어가 예전 근무표를 쓰므로 알림 줄을 그대로 두고 다시 누르게 한다
+    function ok() {
+      st.ios.sent = sent; iosClipFail = false;
+      if (sendTimes) st.ios.times = curTimes();
+      save(); renderIos();
+      location.href = url;
+    }
+    function fail() { iosClipFail = true; renderIos(); location.href = url; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(plan).then(ok, fail);
+    else fail();
   }
+  var iosClipFail = false;
+  function nightLate() { var t = S.parseTime(st.alarms.wake.night); return !!t && t.h >= 18; }
   function renderIos() {
     var show = !native && !framed() && isIOS();
     $('iosBox').hidden = !show;
@@ -1035,10 +1042,13 @@ a.btn.primary { color: var(--surface); }
         var t = new Date(s.at), until = s.until.slice(0, 4) + '. ' + (+s.until.slice(4, 6)) + '. ' + (+s.until.slice(6)) + '.';
         h.push('<div class="nextA">마지막 반영: ' + (t.getMonth() + 1) + '/' + t.getDate() + ' ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ' · ' + until + '까지</div>');
       }
+      if (iosClipFail) h.push('<div class="warn">근무표를 클립보드에 넣지 못해서 반영되지 않았을 수 있어요. [지금 시계 알람에 반영]을 다시 눌러 주세요.</div>');
+      if (nightLate()) h.push('<div class="warn">야간 출근 시각이 18:00 이후예요. 아이폰 시계 알람은 야간을 18:00 전으로 해야 날짜가 맞습니다.</div>');
       if (need) h.push('<div class="warn">' + esc(need) + '</div>');
       h.push('<div>근무를 바꾸면 위쪽에 알림 줄이 뜹니다. 누르면 단축어 앱이 잠깐 열렸다가 반영돼요. 아래 출근 시각을 바꿔도 알림 줄이 뜨고, 누르면 시계 알람 시각도 바뀝니다 (단축어 「교대시각」 필요, 야간은 18:00 전으로).</div>');
       h.push('<div class="btnrow"><button type="button" class="btn primary" id="iosGo">지금 시계 알람에 반영</button><a class="btn" href="iphone-alarm.html">처음 설정 방법</a></div>');
     } else {
+      if (iosClipFail) h.push('<div class="warn">근무표를 클립보드에 넣지 못해서 시계 알람이 꺼지지 않았을 수 있어요. 스위치를 다시 켰다 꺼 주세요.</div>');
       h.push('<div>' + (s && s.sig === 'OFF' ? '꺼짐: 시계 알람 2개를 껐고, 밤 9시 자동화도 계속 꺼 둡니다. 다시 켜면 근무표대로 돌아옵니다. ' : '아이폰에서 시계 앱 알람(끝까지 울림)을 쓰려면 켜세요. ') + '<a href="iphone-alarm.html">처음 설정 방법 (단축어 1개 + 자동화)</a></div>');
     }
     $('iosStatus').innerHTML = h.join('');

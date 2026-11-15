@@ -1,4 +1,4 @@
-var CACHE = 'shiftcal-15afd0c263';
+var CACHE = 'shiftcal-e4fd33a368';
 var CORE = ["./","index.html","iphone-alarm.html","manifest.webmanifest","icon.svg","icon-180.png","icon-192.png","icon-512.png"];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(CORE); }).then(function () { return self.skipWaiting(); }));
@@ -31,7 +31,8 @@ self.addEventListener('fetch', function (e) {
   if (same && /\.(ics|apk)$/i.test(url.pathname)) return;
   if (!same && !/^fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)) return;
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then(function (res) { return put('./', res); }).catch(function () {
+    // 연 페이지는 그 주소로 저장 (전에는 모든 페이지를 './' 로 저장해서, 알람 안내를 보고 나면 오프라인 첫 화면이 안내 페이지가 됐음)
+    e.respondWith(fetch(req).then(function (res) { return put(req, res); }).catch(function () {
       return caches.match(req, { ignoreSearch: true }).then(function (r) { return r || caches.match('./'); });
     }));
     return;
