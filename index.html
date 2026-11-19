@@ -219,6 +219,8 @@ a.btn.primary { color: var(--surface); }
 .times { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 16px 14px; margin-top: -4px; }
 .times label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sub); background: var(--off-tint);
   border-radius: 10px; padding: 4px 4px 4px 12px; }
+.times .tp { display: flex; align-items: center; gap: 8px; background: var(--off-tint); border-radius: 10px; padding: 4px 4px 4px 12px; }
+.times .tp label { background: none; padding: 0; border-radius: 0; }
 .times input { border: 0; background: var(--surface); border-radius: 8px; padding: 6px 8px; font-weight: 600; font-size: 15px; }
 .sw { position: relative; width: 50px; height: 30px; flex: none; }
 .sw input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
@@ -345,6 +347,7 @@ a.btn.primary { color: var(--surface); }
     </div>
     <div id="hostBox" hidden>
       <h4>자동 업데이트 구독 (대근 없이 기본 근무표만)</h4>
+      <div class="note" style="padding:0 0 6px">구독 파일의 알림은 출근 05:30(주간)·17:30(야간), 전날 21:00으로 <b>고정</b>입니다. 시각을 바꾸려면 위 <b>파일 받기</b>를 쓰세요. 구글 캘린더는 구독 일정의 알림을 지웁니다.</div>
       <div class="group ex">
         <a class="btn primary" id="subLink" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/></svg><span id="subTxt">구독하기</span></a>
         <div class="note" style="padding:0">한 번 누르면 아이폰 캘린더가 알아서 새 근무표를 받아 옵니다. 구독 화면에서 <b>알림 제거</b>를 꺼야 알림이 울립니다.
@@ -393,8 +396,8 @@ a.btn.primary { color: var(--surface); }
           <label class="sw"><input type="checkbox" id="aWake" aria-label="출근 기상 알람"><i></i></label>
         </div>
         <div class="times">
-          <label for="aWakeDay">주간</label><input type="time" id="aWakeDay">
-          <label for="aWakeNight">야간</label><input type="time" id="aWakeNight">
+          <span class="tp"><label for="aWakeDay">주간</label><input type="time" id="aWakeDay"></span>
+          <span class="tp"><label for="aWakeNight">야간</label><input type="time" id="aWakeNight"></span>
         </div>
         <div class="item">
           <div class="txt"><div class="nm">전날 미리 알림</div><div class="ds">근무가 바뀌기 전날 "내일부터 야간 2일"</div></div>
@@ -551,7 +554,7 @@ a.btn.primary { color: var(--surface); }
 
   function overrideOf(overrides, y, m, d) {
     var o = overrides && overrides[dateKey(y, m, d)];
-    return o && LABEL[o.shift] ? o : null;
+    return o && typeof o.shift === 'string' && Object.prototype.hasOwnProperty.call(LABEL, o.shift) ? o : null;
   }
 
   // 변경을 반영한 내 근무
@@ -563,7 +566,7 @@ a.btn.primary { color: var(--surface); }
   // 같은 근무가 연속되는 일수 (그날 포함, 그날부터 앞으로). 변경 반영
   function runLength(team, y, m, d, order, overrides) {
     var k = myShift(team, y, m, d, order, overrides), n = 1;
-    while (n < 31 && myShift(team, y, m, d + n, order, overrides) === k) n++;
+    while (n < 400 && myShift(team, y, m, d + n, order, overrides) === k) n++;   // 긴 휴가도 끝까지 센다 (예전엔 31일에서 멈춤)
     return n;
   }
 
@@ -776,8 +779,26 @@ a.btn.primary { color: var(--surface); }
     if (S.TEAMS.indexOf(saved.team) >= 0) st.team = saved.team;
     // 조 순서는 사용자가 설정에서 직접 고른 경우만 따른다. 예전 판은 기본값(D→A→B→C, 틀렸던 순서)도 저장했으므로 무시
     if (saved.view === 'all') st.view = 'all';
-    if (saved.ios && typeof saved.ios === 'object') st.ios = { on: !!saved.ios.on, sent: saved.ios.sent || null, times: saved.ios.times || null };
-    if (saved.overrides && typeof saved.overrides === 'object') st.overrides = saved.overrides;
+    if (saved.ios && typeof saved.ios === 'object') {
+      var sv = saved.ios.sent, tm = saved.ios.times;
+      st.ios = { on: !!saved.ios.on,
+        sent: sv && typeof sv === 'object' && /^\d{8}$/.test(String(sv.until)) && typeof sv.sig === 'string' && isFinite(sv.at) ? { sig: sv.sig, until: String(sv.until), at: +sv.at } : null,
+        times: tm && typeof tm === 'object' && S.parseTime(tm.day) && S.parseTime(tm.night) ? { day: tm.day, night: tm.night } : null };
+    }
+    if (saved.overrides && typeof saved.overrides === 'object') {
+      // 조·날짜·근무 종류가 올바른 변경만 받는다 (망가진 저장값이 화면을 멈추게 하지 않도록)
+      S.TEAMS.forEach(function (t) {
+        var src = saved.overrides[t];
+        if (!src || typeof src !== 'object') return;
+        var dst = {};
+        Object.keys(src).forEach(function (k) {
+          var o = src[k];
+          if (/^\d{4}-\d\d-\d\d$/.test(k) && o && typeof o === 'object' && typeof o.shift === 'string' && Object.prototype.hasOwnProperty.call(S.LABEL, o.shift))
+            dst[k] = { shift: o.shift, memo: typeof o.memo === 'string' ? o.memo.slice(0, 200) : '' };
+        });
+        st.overrides[t] = dst;
+      });
+    }
     if (saved.channels && typeof saved.channels === 'object') st.channels = saved.channels;
     if (saved.alarms) ['wake', 'eve', 'off'].forEach(function (k) { if (saved.alarms[k]) Object.assign(st.alarms[k], saved.alarms[k]); });
     if (!S.parseTime(st.alarms.wake.day)) st.alarms.wake.day = S.DEFAULT_ALARMS.wake.day;
@@ -1194,7 +1215,7 @@ a.btn.primary { color: var(--surface); }
       inst.innerHTML = '아이폰은 먼저 사파리 공유 버튼에서 <b>홈 화면에 추가</b>를 하고, 홈 화면의 앱에서 켜 주세요. iOS 16.4 이상에서 됩니다.';
     } else if (!pushOk) {
       inst.hidden = false;
-      inst.textContent = '이 화면(인앱 브라우저 등)에서는 알림을 받을 수 없습니다. Chrome이나 삼성 인터넷 등 기본 브라우저에서 열어 주세요.';
+      inst.textContent = isIOS() ? '이 아이폰은 앱에서 알림을 받을 수 없습니다. iOS 16.4 이상으로 올려 주세요.' : '이 화면(인앱 브라우저 등)에서는 알림을 받을 수 없습니다. Chrome이나 삼성 인터넷 등 기본 브라우저에서 열어 주세요.';
     } else {
       inst.hidden = true;
     }
@@ -1310,7 +1331,8 @@ a.btn.primary { color: var(--surface); }
   function loadPushList() {
     if (!push.code || !push.srv) return;
     fetch(push.srv + '/api/messages?limit=30', { headers: { 'x-code': push.code } }).then(function (r) { if (!r.ok) throw r.status; return r.json(); }).then(function (j) {
-      var msgs = Array.isArray(j.messages) ? j.messages : [];
+      if (!j || !Array.isArray(j.messages)) throw 0;
+      var msgs = j.messages;
       var sig = push.code + '|' + JSON.stringify(msgs);
       var oldErr = $('pushListErr'); if (oldErr) oldErr.remove();
       if (sig === pushListSig) return;
@@ -1450,7 +1472,7 @@ a.btn.primary { color: var(--surface); }
     }
     var box = $('aStatus');
     if (!native) {
-      box.innerHTML = '<span class="webonly">웹에서는 알람이 울리지 않습니다.</span> 여기 시각은 <b>캘린더로 내보내기</b> 파일의 알림(아이폰·애플워치)에 쓰입니다. 안드로이드는 앱을 설치하면 알람이 울립니다.';
+      box.innerHTML = '<div><span class="webonly">웹에서는 알람이 울리지 않습니다.</span> 여기 시각은 <b>캘린더로 내보내기</b> 파일의 알림(아이폰·애플워치)에 쓰입니다. 안드로이드는 앱을 설치하면 알람이 울립니다.</div>';
       return;
     }
     var r = lastStatus || {}, h = [];
@@ -1477,10 +1499,16 @@ a.btn.primary { color: var(--surface); }
   }
 
   // 앱으로 돌아올 때 날짜·알람·설비 알림 갱신 (자정 넘김, 권한 변경)
+  function checkDay() {   // 날짜가 바뀌었으면 화면을 새로 그린다. true 면 바뀐 것
+    var old = today; setToday();
+    if (same(old, today)) return false;
+    sel = Object.assign({}, today); view = { y: today.y, m: today.m }; render();
+    return true;
+  }
+  setInterval(function () { if (document.visibilityState === 'visible' && checkDay()) { syncAlarms(); showStatus(); } }, 30000);   // 켜 둔 채 자정을 넘겨도 날짜가 바뀌게
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'visible') return;
-    var old = today; setToday();
-    if (!same(old, today)) { sel = Object.assign({}, today); view = { y: today.y, m: today.m }; render(); }
+    checkDay();
     syncAlarms();
     loadPushList();
     pushCheck();
