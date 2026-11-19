@@ -12,7 +12,7 @@ self.addEventListener('activate', function (e) {
 function put(req, res, ev) {
   if (res && (res.ok || res.type === 'opaque')) {
     var copy = res.clone(), p = caches.open(CACHE).then(function (c) { return c.put(req, copy); }).catch(function () {});
-    if (ev) ev.waitUntil(p);
+    try { if (ev) ev.waitUntil(p); } catch (x) {}   // 응답을 이미 내보낸 뒤에는 waitUntil 이 던질 수 있다
   }
   return res;
 }
@@ -51,13 +51,13 @@ self.addEventListener('fetch', function (e) {
       // 저장해 둔 같은 페이지 → (없으면) 네트워크 응답을 계속 기다림 → 그래도 안 되면 홈 화면
       return caches.match(req, { ignoreSearch: true }).then(function (r) {
         return r || netNav.catch(function () { return null; });
-      }).then(function (r) { return r || caches.match('./'); });
+      }).then(function (r) { return r || caches.match('./'); }).then(function (r) { return r || Response.error(); });   // 아무것도 없으면 깔끔한 네트워크 오류
     }));
     return;
   }
   e.respondWith(caches.match(req).then(function (hit) {
-    var net = fetch(req).then(function (res) { return put(req, res, e); });
-    if (hit) { net.catch(function () {}); return hit; }
+    var net = fetch(req).then(function (res) { return put(req, res, hit ? null : e); });
+    if (hit) { e.waitUntil(net.catch(function () {})); return hit; }   // 저장본을 바로 내주고, 뒤에서 새로 받아 둔다
     return net;
   }));
 });

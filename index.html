@@ -347,7 +347,7 @@ a.btn.primary { color: var(--surface); }
     </div>
     <div id="hostBox" hidden>
       <h4>자동 업데이트 구독 (대근 없이 기본 근무표만)</h4>
-      <div class="note" style="padding:0 0 6px">구독 파일의 알림은 출근 05:30(주간)·17:30(야간), 전날 21:00으로 <b>고정</b>입니다. 시각을 바꾸려면 위 <b>파일 받기</b>를 쓰세요. 구글 캘린더는 구독 일정의 알림을 지웁니다.</div>
+      <div class="note" style="padding:0 4px 6px">구독 파일의 알림은 출근 05:30(주간)·17:30(야간), 전날 21:00으로 <b>고정</b>입니다. 시각을 바꾸려면 위 <b>파일 받기</b>를 쓰세요. 구글 캘린더는 구독 일정의 알림을 지웁니다.</div>
       <div class="group ex">
         <a class="btn primary" id="subLink" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/></svg><span id="subTxt">구독하기</span></a>
         <div class="note" style="padding:0">한 번 누르면 아이폰 캘린더가 알아서 새 근무표를 받아 옵니다. 구독 화면에서 <b>알림 제거</b>를 꺼야 알림이 울립니다.
@@ -403,7 +403,7 @@ a.btn.primary { color: var(--surface); }
           <div class="txt"><div class="nm">전날 미리 알림</div><div class="ds">근무가 바뀌기 전날 "내일부터 야간 2일"</div></div>
           <label class="sw"><input type="checkbox" id="aEve" aria-label="전날 미리 알림"><i></i></label>
         </div>
-        <div class="times"><label for="aEveTime">알림 시각</label><input type="time" id="aEveTime"></div>
+        <div class="times"><span class="tp"><label for="aEveTime">알림 시각</label><input type="time" id="aEveTime"></span></div>
         <div class="status" id="aStatus"></div>
       </div>
     </div>
@@ -1254,7 +1254,11 @@ a.btn.primary { color: var(--surface); }
   $('pushOn').addEventListener('click', function () {
     var linkErr = pushLinkInput();
     if (linkErr) { pushSay(linkErr); return; }
-    if (!pushOk) { pushSay('이 브라우저에서는 알림을 받을 수 없습니다. 아이폰은 홈 화면에 추가한 앱에서 켜 주세요.'); return; }
+    if (!pushOk) {
+      pushSay(isIOS() ? (isStandalone() ? '이 아이폰은 앱에서 알림을 받을 수 없습니다. iOS 16.4 이상으로 올려 주세요.' : '아이폰은 홈 화면에 추가한 앱에서 켜 주세요.')
+        : '이 브라우저에서는 알림을 받을 수 없습니다. Chrome이나 삼성 인터넷 등 기본 브라우저에서 열어 주세요.');
+      return;
+    }
     push.mode = $('pushMode').value; pushSave();
     pushSay('등록하는 중…');
     Notification.requestPermission().then(function (perm) {
@@ -1502,7 +1506,8 @@ a.btn.primary { color: var(--surface); }
   function checkDay() {   // 날짜가 바뀌었으면 화면을 새로 그린다. true 면 바뀐 것
     var old = today; setToday();
     if (same(old, today)) return false;
-    sel = Object.assign({}, today); view = { y: today.y, m: today.m }; render();
+    if (!activeSheet) { sel = Object.assign({}, today); view = { y: today.y, m: today.m }; }   // 편집 창이 열려 있으면 고르던 날짜를 바꾸지 않는다
+    render();
     return true;
   }
   setInterval(function () { if (document.visibilityState === 'visible' && checkDay()) { syncAlarms(); showStatus(); } }, 30000);   // 켜 둔 채 자정을 넘겨도 날짜가 바뀌게
