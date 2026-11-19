@@ -1,5 +1,5 @@
-var CACHE = 'shiftcal-e4fd33a368';
-var CORE = ["./","index.html","iphone-alarm.html","manifest.webmanifest","icon.svg","icon-180.png","icon-192.png","icon-512.png"];
+var CACHE = 'shiftcal-20261118a';
+var CORE = ["./","index.html","iphone-alarm.html","manifest.webmanifest","icon.svg","icon-180.png","icon-192.png","icon-512.png","badge-96.png"];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(CORE); }).then(function () { return self.skipWaiting(); }));
 });
@@ -12,7 +12,7 @@ function put(req, res) { if (res && (res.ok || res.type === 'opaque')) { var cop
 self.addEventListener('push', function (e) {
   var m = {}; try { m = e.data ? e.data.json() : {}; } catch (x) {}
   var urgent = Number(m.prio) >= 5;
-  e.waitUntil(self.registration.showNotification(m.title || '설비 알림', { body: m.text || '', tag: m.id || undefined, icon: 'icon-192.png', badge: 'icon-192.png',
+  e.waitUntil(self.registration.showNotification(m.title || '설비 알림', { body: m.text || '', tag: m.id || undefined, icon: 'icon-192.png', badge: 'badge-96.png',
     requireInteraction: urgent, renotify: !!m.id && urgent, vibrate: urgent ? [500, 200, 500, 200, 500, 200, 800] : [200], data: { id: m.id } }).then(function () {
     return self.clients.matchAll({ type: 'window' }).then(function (l) { l.forEach(function (c) { c.postMessage('new'); }); });
   }));
@@ -32,8 +32,14 @@ self.addEventListener('fetch', function (e) {
   if (!same && !/^fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)) return;
   if (req.mode === 'navigate') {
     // 연 페이지는 그 주소로 저장 (전에는 모든 페이지를 './' 로 저장해서, 알람 안내를 보고 나면 오프라인 첫 화면이 안내 페이지가 됐음)
-    e.respondWith(fetch(req).then(function (res) { return put(req, res); }).catch(function () {
-      return caches.match(req, { ignoreSearch: true }).then(function (r) { return r || caches.match('./'); });
+    // 느린 현장 네트워크에서 오래 멈추지 않게 2.5초 넘으면 캐시로 먼저 응답한다
+    var netNav = fetch(req).then(function (res) { return put(req, res); });
+    e.respondWith(Promise.race([
+      netNav,
+      new Promise(function (resolve, reject) { setTimeout(function () { reject(new Error('timeout')); }, 2500); })
+    ]).catch(function () {
+      netNav.catch(function () {});
+      return caches.match(req, { ignoreSearch: true }).then(function (r) { return r || caches.match('./') || netNav; });
     }));
     return;
   }

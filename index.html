@@ -7,7 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="교대근무">
-<meta name="theme-color" content="#121A45">
+<meta name="theme-color" content="#eef1f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e14" media="(prefers-color-scheme: dark)">
 <title>교대근무 달력</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -121,8 +122,10 @@ button { cursor: pointer; }
   display: flex; flex-direction: column; align-items: center; justify-content: space-between; position: relative; }
 @media (max-width: 359px) { .cell { aspect-ratio: auto; height: 48px; } .vt button { padding: 0 5px; } }
 /* 4개 조 보기: 그날 주간 조 / 야간 조 글자 */
-.cell .s2 { display: flex; gap: 2px; }
+.cell .s2 { display: flex; gap: 2px; max-width: 100%; justify-content: center; flex-wrap: wrap; }
 .cell .s2 b { min-width: 17px; height: 17px; border-radius: 5px; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; padding: 0 2px; }
+.cell .s2.w3 { gap: 1.5px; }
+.cell .s2.w3 b { min-width: 11px; height: 15px; font-size: 9.5px; padding: 0 1px; border-radius: 4px; }
 .cell .s2 .dd { background: var(--day); color: var(--day-ink); }
 .cell .s2 .nn { background: var(--night); color: var(--night-ink); }
 .cell .s2 b.me { box-shadow: 0 0 0 1.5px var(--ink); }
@@ -135,6 +138,8 @@ button { cursor: pointer; }
 .cell.night .s { background: var(--night); color: var(--night-ink); }
 .cell.off .s { color: var(--off); font-weight: 500; }
 .cell.today .d { background: var(--today); color: #fff; border-radius: 999px; min-width: 24px; height: 24px; display: grid; place-items: center; margin-top: -2px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cell.today .d { background: #d9383e; color: #fff; } }
+:root[data-theme="dark"] .cell.today .d { background: #d9383e; color: #fff; }
 .cell.sel { box-shadow: inset 0 0 0 2px var(--ink); }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--sub); padding: 10px 6px 2px; border-top: 1px solid var(--hair); margin-top: 8px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -197,7 +202,7 @@ a.btn.primary { color: var(--surface); }
 
 /* 설정 시트 */
 .scrim { position: fixed; inset: 0; background: rgba(8, 12, 20, .45); z-index: 20; }
-.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 88vh; overflow-y: auto;
+.sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; max-height: 88vh; overflow-y: auto; overscroll-behavior: contain;
   background: var(--bg); border-radius: 22px 22px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, .2);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-top: 8px; padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
@@ -768,13 +773,16 @@ a.btn.primary { color: var(--surface); }
   if (!native) { st.alarms.wake.on = true; st.alarms.eve.on = true; }
   try {
     var saved = JSON.parse(localStorage.getItem(KEY) || '{}');
-    if (saved.team) st.team = saved.team;
+    if (S.TEAMS.indexOf(saved.team) >= 0) st.team = saved.team;
     // 조 순서는 사용자가 설정에서 직접 고른 경우만 따른다. 예전 판은 기본값(D→A→B→C, 틀렸던 순서)도 저장했으므로 무시
     if (saved.view === 'all') st.view = 'all';
     if (saved.ios && typeof saved.ios === 'object') st.ios = { on: !!saved.ios.on, sent: saved.ios.sent || null, times: saved.ios.times || null };
     if (saved.overrides && typeof saved.overrides === 'object') st.overrides = saved.overrides;
     if (saved.channels && typeof saved.channels === 'object') st.channels = saved.channels;
     if (saved.alarms) ['wake', 'eve', 'off'].forEach(function (k) { if (saved.alarms[k]) Object.assign(st.alarms[k], saved.alarms[k]); });
+    if (!S.parseTime(st.alarms.wake.day)) st.alarms.wake.day = S.DEFAULT_ALARMS.wake.day;
+    if (!S.parseTime(st.alarms.wake.night)) st.alarms.wake.night = S.DEFAULT_ALARMS.wake.night;
+    if (!S.parseTime(st.alarms.eve.time)) st.alarms.eve.time = S.DEFAULT_ALARMS.eve.time;
   } catch (e) {}
   // 휴무 시작 알림은 없앰 (예전에 켜 둔 사람도 꺼서, 이미 예약된 알림이 다음 동기화 때 지워지게)
   st.alarms.off.on = false;
@@ -827,9 +835,13 @@ a.btn.primary { color: var(--surface); }
   });
 
   var sx = null, sy = 0;
-  $('cal').addEventListener('touchstart', function (e) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  $('cal').addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) { sx = null; return; }
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+  }, { passive: true });
+  $('cal').addEventListener('touchcancel', function () { sx = null; }, { passive: true });
   $('cal').addEventListener('touchend', function (e) {
-    if (sx === null) return;
+    if (sx === null || e.changedTouches.length !== 1) { sx = null; return; }
     var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) move(dx < 0 ? 1 : -1);
   });
@@ -893,7 +905,8 @@ a.btn.primary { color: var(--surface); }
           var b2 = '<b class="' + (at[t] === 'day' ? 'dd' : 'nn') + (t === st.team ? ' me' : '') + '">' + t + '</b>';
           if (at[t] === 'day') dd.push(b2); else if (at[t] === 'night') nn.push(b2);
         });
-        body = '<span class="s2">' + dd.join('') + nn.join('') + '</span>';
+        var nBadges = dd.length + nn.length;
+        body = '<span class="s2' + (nBadges >= 3 ? ' w3' : '') + '">' + dd.join('') + nn.join('') + '</span>';
         lab += ' · 주간 ' + S.TEAMS.filter(function (t) { return at[t] === 'day'; }).join(',') + '조, 야간 ' +
           S.TEAMS.filter(function (t) { return at[t] === 'night'; }).join(',') + '조';
       }
@@ -962,10 +975,20 @@ a.btn.primary { color: var(--surface); }
   });
 
   // ---- 시트 (근무 변경 / 캘린더 내보내기 / 설정): 한 번에 하나 ----
-  var SHEETS = ['ovSheet', 'exSheet', 'sheet'], opener = null;
+  var SHEETS = ['ovSheet', 'exSheet', 'sheet'], opener = null, activeSheet = null;
+  function sheetFocusables(el) {
+    return Array.prototype.filter.call(
+      el.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+      function (x) { return !x.hidden && x.offsetParent !== null; }
+    );
+  }
   function openSheet(id) {
+    activeSheet = id ? $(id) : null;
     SHEETS.forEach(function (s) { $(s).hidden = s !== id; });
     $('scrim').hidden = !id;
+    document.body.style.overflow = id ? 'hidden' : '';
+    var wrap = document.querySelector('.wrap');
+    if (wrap) { if (id) wrap.setAttribute('aria-hidden', 'true'); else wrap.removeAttribute('aria-hidden'); }
     if (!id) { if (opener) opener.focus(); opener = null; return; }
     if (!opener) opener = document.activeElement;
     if (id === 'sheet') refreshStatus();
@@ -979,13 +1002,24 @@ a.btn.primary { color: var(--surface); }
   $('exToSet').addEventListener('click', function () { openSheet('sheet'); });
   document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { openSheet(null); }); });
   $('scrim').addEventListener('click', function () { openSheet(null); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') openSheet(null); });
+  document.addEventListener('keydown', function (e) {
+    if (!activeSheet) return;
+    if (e.key === 'Escape') { openSheet(null); return; }
+    if (e.key === 'Tab') {
+      var list = sheetFocusables(activeSheet);
+      if (!list.length) return;
+      var first = list[0], last = list[list.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
 
   // ---- 아이폰 시계 알람: 단축어 '교대알람' 에 앞으로 400일 내 근무(변경 반영)를 글자로 넘긴다 ----
   // 단축어가 파일로 저장하고, 매일 밤 자동화가 내일 근무를 보고 시계 앱 알람 2개를 켜고 끈다 (iphone-alarm.html)
   // 근무표가 끊기지 않게 10년치를 보낸다 (클립보드, 약 37KB). 주소에 같이 넣는 입력은 예전처럼 400일만 (주소가 너무 길면 안 열릴 수 있음)
   var IOS_SHORTCUT = '교대알람', IOS_TIME_SHORTCUT = '교대시각', IOS_DAYS = 3650, IOS_URL_DAYS = 400, IOS_WARN_DAYS = 30;
   function isIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+  function isStandalone() { return navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); }
   function iosSig() {
     var o = ovs(st.team), keys = Object.keys(o).sort();
     return st.team + '|' + st.order + '|' + keys.map(function (k) { return k + o[k].shift; }).join(',');
@@ -1046,13 +1080,16 @@ a.btn.primary { color: var(--surface); }
       if (nightLate()) h.push('<div class="warn">야간 출근 시각이 18:00 이후예요. 아이폰 시계 알람은 야간을 18:00 전으로 해야 날짜가 맞습니다.</div>');
       if (need) h.push('<div class="warn">' + esc(need) + '</div>');
       h.push('<div>근무를 바꾸면 위쪽에 알림 줄이 뜹니다. 누르면 단축어 앱이 잠깐 열렸다가 반영돼요. 아래 출근 시각을 바꿔도 알림 줄이 뜨고, 누르면 시계 알람 시각도 바뀝니다 (단축어 「교대시각」 필요, 야간은 18:00 전으로).</div>');
-      h.push('<div class="btnrow"><button type="button" class="btn primary" id="iosGo">지금 시계 알람에 반영</button><a class="btn" href="iphone-alarm.html">처음 설정 방법</a></div>');
+      var btns = '<button type="button" class="btn primary" id="iosGo">지금 시계 알람에 반영</button><a class="btn" href="iphone-alarm.html">처음 설정 방법</a>';
+      if (timesChanged()) btns += '<button type="button" class="btn" id="iosSkipTime">시각은 시계 앱에서 직접 맞췄어요</button>';
+      h.push('<div class="btnrow">' + btns + '</div>');
     } else {
       if (iosClipFail) h.push('<div class="warn">근무표를 클립보드에 넣지 못해서 시계 알람이 꺼지지 않았을 수 있어요. 스위치를 다시 켰다 꺼 주세요.</div>');
       h.push('<div>' + (s && s.sig === 'OFF' ? '꺼짐: 시계 알람 2개를 껐고, 밤 9시 자동화도 계속 꺼 둡니다. 다시 켜면 근무표대로 돌아옵니다. ' : '아이폰에서 시계 앱 알람(끝까지 울림)을 쓰려면 켜세요. ') + '<a href="iphone-alarm.html">처음 설정 방법 (단축어 1개 + 자동화)</a></div>');
     }
     $('iosStatus').innerHTML = h.join('');
     if ($('iosGo')) $('iosGo').addEventListener('click', iosSend);
+    if ($('iosSkipTime')) $('iosSkipTime').addEventListener('click', function () { st.ios.times = curTimes(); save(); renderIos(); });
   }
   // 켜면 지금 근무표를, 끄면 전부 휴무를 바로 보낸다 (단축어 앱이 열림)
   $('iosOn').addEventListener('change', function () { st.ios.on = $('iosOn').checked; save(); iosSend(!st.ios.on); });
@@ -1120,6 +1157,7 @@ a.btn.primary { color: var(--surface); }
   }
   var pushTrust = push.srv ? srvCheck(push.srv) : Promise.resolve(true);
   var pushOk = !native && !framed() && /^https?:$/.test(location.protocol) && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  var pushLinkOpened = false;
   function parsePush(text) {
     var c = /[#&?]alarm=([^&\s]+)/.exec(String(text || '')), u = /[#&?]srv=([^&\s]+)/.exec(String(text || ''));
     if (!c || !u) return null;
@@ -1145,11 +1183,21 @@ a.btn.primary { color: var(--surface); }
     return navigator.serviceWorker.getRegistration().then(function (r) { return r ? r.pushManager.getSubscription() : null; }).then(subBody);
   }
   function renderPush() {
-    var show = pushOk || (isIOS() && !native && !framed() && /^https?:$/.test(location.protocol));
+    var canWeb = !native && !framed() && /^https?:$/.test(location.protocol);
+    var show = pushOk || (canWeb && (isIOS() || !!push.code || pushLinkOpened));
     $('pushBox').hidden = !show;
     if (!show) return;
-    var standalone = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
-    $('pushInstall').hidden = !(isIOS() && !standalone);
+    var standalone = isStandalone();
+    var inst = $('pushInstall');
+    if (isIOS() && !standalone) {
+      inst.hidden = false;
+      inst.innerHTML = '아이폰은 먼저 사파리 공유 버튼에서 <b>홈 화면에 추가</b>를 하고, 홈 화면의 앱에서 켜 주세요. iOS 16.4 이상에서 됩니다.';
+    } else if (!pushOk) {
+      inst.hidden = false;
+      inst.textContent = '이 화면(인앱 브라우저 등)에서는 알림을 받을 수 없습니다. Chrome이나 삼성 인터넷 등 기본 브라우저에서 열어 주세요.';
+    } else {
+      inst.hidden = true;
+    }
     $('pushMode').value = push.mode || 'team';
     $('pushLink').placeholder = push.code ? '링크 저장됨. 바꿀 때만 붙여넣기' : '설비 담당자에게 받은 링크를 붙여넣기';
     $('pushCopy').hidden = !(isIOS() && !standalone && push.link);
@@ -1191,7 +1239,13 @@ a.btn.primary { color: var(--surface); }
     Notification.requestPermission().then(function (perm) {
       if (perm !== 'granted') throw new Error('알림 권한이 꺼져 있습니다. 폰 설정에서 이 앱의 알림을 허용해 주세요.');
       return Promise.all([navigator.serviceWorker.register('sw.js').then(function () { return navigator.serviceWorker.ready; }),
-        fetch(push.srv + '/api/config').then(function (r) { return r.json(); })]);
+        fetch(push.srv + '/api/config').then(function (r) {
+          if (!r.ok) throw new Error('서버 설정을 불러오지 못했습니다. (' + r.status + ')');
+          return r.json();
+        }).then(function (cfg) {
+          if (!cfg || !cfg.vapid) throw new Error('서버 알림 키가 올바르지 않습니다.');
+          return cfg;
+        })]);
     }).then(function (a) {
       return a[0].pushManager.getSubscription().then(function (s) {
         return s || a[0].pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uBytes(a[1].vapid) });
@@ -1251,13 +1305,21 @@ a.btn.primary { color: var(--surface); }
     var d = new Date(ms), p = function (x) { return ('0' + x).slice(-2); };
     return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
+  var pushListSig = null, pushImgUrls = [];
+  function clearPushUrls() { while (pushImgUrls.length) URL.revokeObjectURL(pushImgUrls.pop()); }
   function loadPushList() {
     if (!push.code || !push.srv) return;
     fetch(push.srv + '/api/messages?limit=30', { headers: { 'x-code': push.code } }).then(function (r) { if (!r.ok) throw r.status; return r.json(); }).then(function (j) {
+      var msgs = Array.isArray(j.messages) ? j.messages : [];
+      var sig = push.code + '|' + JSON.stringify(msgs);
+      var oldErr = $('pushListErr'); if (oldErr) oldErr.remove();
+      if (sig === pushListSig) return;
+      pushListSig = sig;
+      clearPushUrls();
       var box = $('pushList');
       box.textContent = '';
-      if (!j.messages.length) { var n = document.createElement('div'); n.className = 'note'; n.style.padding = '0'; n.textContent = '아직 알림이 없습니다.'; box.appendChild(n); return; }
-      j.messages.forEach(function (x) {
+      if (!msgs.length) { var n = document.createElement('div'); n.className = 'note'; n.style.padding = '0'; n.textContent = '아직 알림이 없습니다.'; box.appendChild(n); return; }
+      msgs.forEach(function (x) {
         var d = document.createElement('div'); d.style.cssText = 'padding:8px 0;border-bottom:1px solid var(--hair);overflow-wrap:anywhere';
         var hd = document.createElement('div'); hd.style.cssText = 'display:flex;align-items:baseline;justify-content:space-between;gap:8px';
         var b = document.createElement('div'); b.className = 'nm'; b.textContent = x.title; if (x.prio >= 5) b.style.color = 'var(--warn)'; hd.appendChild(b);
@@ -1268,14 +1330,15 @@ a.btn.primary { color: var(--surface); }
           var pic = document.createElement('button'); pic.type = 'button'; pic.className = 'btn'; pic.style.marginTop = '6px'; pic.textContent = '사진 보기';
           pic.addEventListener('click', function () {
             fetch(push.srv + '/api/image/' + encodeURIComponent(x.id), { headers: { 'x-code': push.code } }).then(function (r) { if (!r.ok) throw 0; return r.blob(); }).then(function (bl) {
-              var im = document.createElement('img'); im.alt = x.title + ' 사진'; im.style.cssText = 'max-width:100%;display:block;margin-top:6px;border-radius:6px'; im.src = URL.createObjectURL(bl); pic.replaceWith(im);
+              var u = URL.createObjectURL(bl); pushImgUrls.push(u);
+              var im = document.createElement('img'); im.alt = x.title + ' 사진'; im.style.cssText = 'max-width:100%;display:block;margin-top:6px;border-radius:6px'; im.src = u; pic.replaceWith(im);
             }).catch(function () { pic.textContent = '사진을 불러오지 못했습니다'; });
           });
           d.appendChild(pic);
         }
         box.appendChild(d);
       });
-      var c = document.createElement('div'); c.className = 'note'; c.style.cssText = 'padding:8px 0 0;text-align:center'; c.textContent = '최근 ' + j.messages.length + '건 (30일 보관)'; box.appendChild(c);
+      var c = document.createElement('div'); c.className = 'note'; c.style.cssText = 'padding:8px 0 0;text-align:center'; c.textContent = '최근 ' + msgs.length + '건 (30일 보관)'; box.appendChild(c);
       box.scrollTop = 0;
     }).catch(function (st) {
       var box = $('pushList'), n = $('pushListErr');
@@ -1284,7 +1347,6 @@ a.btn.primary { color: var(--surface); }
     });
   }
   if (navigator.serviceWorker) navigator.serviceWorker.addEventListener('message', loadPushList);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) { loadPushList(); pushCheck(); } });
 
   // ---- 캘린더 내보내기 (.ics): 이번 달 1일부터 5년, 내 근무 변경 반영, 알림은 설정의 시각 ----
   var EX_MONTHS = 60;
@@ -1394,7 +1456,7 @@ a.btn.primary { color: var(--surface); }
     var r = lastStatus || {}, h = [];
     if (r.nextAt) {
       var t = new Date(r.nextAt), o = { y: t.getFullYear(), m: t.getMonth(), d: t.getDate() };
-      h.push('<div class="nextA">다음: ' + md(o) + ' ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ' · ' + r.nextTitle + '</div>');
+      h.push('<div class="nextA">다음: ' + md(o) + ' ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ' · ' + esc(r.nextTitle || '') + '</div>');
     } else {
       h.push('<div>' + (anyOn() ? '예약된 알람 없음' : '켜진 알람 없음') + '</div>');
     }
@@ -1414,12 +1476,14 @@ a.btn.primary { color: var(--surface); }
     });
   }
 
-  // 앱으로 돌아올 때 날짜·알람 갱신 (자정 넘김, 권한 변경)
+  // 앱으로 돌아올 때 날짜·알람·설비 알림 갱신 (자정 넘김, 권한 변경)
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'visible') return;
     var old = today; setToday();
     if (!same(old, today)) { sel = Object.assign({}, today); view = { y: today.y, m: today.m }; render(); }
     syncAlarms();
+    loadPushList();
+    pushCheck();
   });
 
   // 공개 웹 주소에서만: 오프라인으로도 열리게 (sw.js 는 make-site.js 가 만듦)
@@ -1431,14 +1495,15 @@ a.btn.primary { color: var(--surface); }
   showStatus();
   syncAlarms();
   renderLink();
-  renderPush();
   // 설비 알림 링크로 열었을 때: 주소창에서 지우고, 우리 서버가 맞으면 저장한 뒤 설정을 보여 준다
   var pushFromLink = parsePush(location.hash);
-  if (pushFromLink && !native) history.replaceState(null, '', location.pathname);
+  if (pushFromLink && !native) { pushLinkOpened = true; history.replaceState(null, '', location.pathname + location.search); }
+  renderPush();
   pushTrust.then(function (ok) {
     if (!ok) { push = {}; pushSave(); renderPush(); } // 예전에 저장된 다른 서버는 버림
     if (!pushFromLink || native) return;
     return srvCheck(pushFromLink.srv).then(function (good) {
+      renderPush();
       openSheet('sheet');
       $('pushBox').scrollIntoView();
       if (!good) { pushSay(BAD_SRV); return; }
@@ -1458,7 +1523,7 @@ a.btn.primary { color: var(--surface); }
   if (linkApply(location.hash)) {
     openSheet('sheet');
     $('linkBox').scrollIntoView();
-    $('linkHint').hidden = !(isIOS() && !navigator.standalone);
+    $('linkHint').hidden = !(isIOS() && !isStandalone());
   }
 })();
 </script>
