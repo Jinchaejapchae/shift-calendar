@@ -1,0 +1,45 @@
+name: Agent Verify (shift-calendar)
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check service worker syntax and iOS push invariant
+        run: |
+          node --check sw.js
+          node -e "const sw=require('fs').readFileSync('sw.js','utf8'); if(!sw.includes('showNotification')) throw new Error('Missing showNotification in sw.js push handler'); console.log('OK sw.js invariants');"
+
+      - name: Check inline HTML scripts and JSON assets
+        run: |
+          node -e "const fs=require('fs'),vm=require('vm');for(const f of ['index.html','iphone-alarm.html']){const h=fs.readFileSync(f,'utf8');let i=0;for(const m of h.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)){new vm.Script(m[1],{filename:f+'#'+(++i)});}console.log('OK',f,'scripts:',i);}"
+          node -e "const fs=require('fs');for(const f of ['duty.json','manifest.webmanifest']){JSON.parse(fs.readFileSync(f,'utf8'));console.log('OK',f);}"
+
+      - name: Enforce sw.js CACHE bump when cached assets change
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          CHANGED="$(git diff --name-only "$BASE_SHA"...HEAD)"
+          if echo "$CHANGED" | grep -Eq '^(index\.html|iphone-alarm\.html|manifest\.webmanifest)$'; then
+            if ! git diff "$BASE_SHA"...HEAD -- sw.js | grep -Eq '^\+.*CACHE\s*='; then
+              echo "::error::Cached asset changed without bumping CACHE in sw.js:1"
+              exit 1
+            fi
+          fi
+          echo "OK CACHE check"
